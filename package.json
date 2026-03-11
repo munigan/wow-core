@@ -7,17 +7,26 @@
 		"build": "next build",
 		"start": "next start",
 		"lint": "biome check --write .",
-		"format": "biome format --write ."
+		"format": "biome format --write .",
+		"db:push": "drizzle-kit push",
+		"db:studio": "drizzle-kit studio",
+		"db:generate": "drizzle-kit generate"
 	},
 	"dependencies": {
 		"@base-ui/react": "1.2.0",
+		"@hookform/resolvers": "5.2.2",
 		"@tanstack/react-query": "5.90.21",
+		"better-auth": "1.5.5",
+		"drizzle-orm": "0.45.1",
 		"lucide-react": "0.577.0",
 		"next": "16.1.6",
+		"postgres": "3.4.8",
 		"react": "19.2.3",
 		"react-dom": "19.2.3",
+		"react-hook-form": "7.71.2",
 		"tailwind-merge": "3.5.0",
-		"tailwind-variants": "3.2.2"
+		"tailwind-variants": "3.2.2",
+		"zod": "4.3.6"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.6",
@@ -25,6 +34,7 @@
 		"@types/node": "^20",
 		"@types/react": "^19",
 		"@types/react-dom": "^19",
+		"drizzle-kit": "0.31.9",
 		"tailwindcss": "^4",
 		"typescript": "^5"
 	}

@@ -61,7 +61,7 @@
 	--font-body: var(--font-jetbrains-mono), "JetBrains Mono", monospace;
 
 	/* Font Sizes */
-	--text-2xs: 0.5625rem; /* 9px */
+	--text-2xs: 0.625rem; /* 10px */
 	--text-2xs--line-height: 1rem;
 	--text-xs: 0.6875rem; /* 11px */
 	--text-xs--line-height: 1rem;
