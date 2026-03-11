@@ -1,34 +1,48 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, LogIn, MessageCircle, Sword } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 
+const signInSchema = z.object({
+	email: z.email("Invalid email address"),
+	password: z.string().min(1, "Password is required"),
+});
+
+type SignInForm = z.infer<typeof signInSchema>;
+
 export default function SignInPage() {
 	const router = useRouter();
-	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
-	const [showPassword, setShowPassword] = useState(false);
-	const [error, setError] = useState("");
-	const [loading, setLoading] = useState(false);
+	const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+	const [isLoading, setIsLoading] = useState(false);
 
-	async function handleSignIn(e: React.FormEvent) {
-		e.preventDefault();
-		setError("");
-		setLoading(true);
+	const {
+		register,
+		handleSubmit,
+		setError,
+		formState: { errors },
+	} = useForm<SignInForm>({
+		resolver: zodResolver(signInSchema),
+	});
+
+	async function onSubmitAction(data: SignInForm) {
+		setIsLoading(true);
 
 		const result = await authClient.signIn.email({
-			email,
-			password,
+			email: data.email,
+			password: data.password,
 		});
 
 		if (result.error) {
-			setError(result.error.message ?? "Sign in failed");
-			setLoading(false);
+			setError("root", { message: result.error.message ?? "Sign in failed" });
+			setIsLoading(false);
 			return;
 		}
 
@@ -45,7 +59,7 @@ export default function SignInPage() {
 
 	return (
 		<form
-			onSubmit={handleSignIn}
+			onSubmit={handleSubmit(onSubmitAction)}
 			className="flex w-[420px] flex-col gap-8 border border-border bg-surface p-10"
 		>
 			{/* Logo */}
@@ -63,14 +77,19 @@ export default function SignInPage() {
 
 			{/* Form Fields */}
 			<div className="flex flex-col gap-4">
-				<Input
-					label="EMAIL OR BATTLE.NET ID"
-					type="email"
-					placeholder="arthas@frostmourne.gg"
-					value={email}
-					onChange={(e) => setEmail(e.target.value)}
-					required
-				/>
+				<div className="flex flex-col gap-1.5">
+					<Input
+						label="EMAIL OR BATTLE.NET ID"
+						type="email"
+						placeholder="arthas@frostmourne.gg"
+						{...register("email")}
+					/>
+					{errors.email && (
+						<p className="font-body text-2xs font-medium text-red-500">
+							{errors.email.message}
+						</p>
+					)}
+				</div>
 
 				<div className="flex flex-col gap-1.5">
 					<div className="flex items-center justify-between">
@@ -90,31 +109,36 @@ export default function SignInPage() {
 					<div className="relative">
 						<input
 							id="password"
-							type={showPassword ? "text" : "password"}
+							type={isPasswordVisible ? "text" : "password"}
 							placeholder="••••••••••••"
-							value={password}
-							onChange={(e) => setPassword(e.target.value)}
-							required
 							className="h-10 w-full border border-border bg-elevated px-3.5 font-body text-sm font-medium text-primary outline-none placeholder:text-dimmed focus:border-border-light"
+							{...register("password")}
 						/>
 						<button
 							type="button"
-							onClick={() => setShowPassword(!showPassword)}
+							onClick={() => setIsPasswordVisible(!isPasswordVisible)}
 							className="absolute top-1/2 right-3.5 -translate-y-1/2 text-dimmed"
 						>
-							{showPassword ? (
+							{isPasswordVisible ? (
 								<Eye className="h-3.5 w-3.5" />
 							) : (
 								<EyeOff className="h-3.5 w-3.5" />
 							)}
 						</button>
 					</div>
+					{errors.password && (
+						<p className="font-body text-2xs font-medium text-red-500">
+							{errors.password.message}
+						</p>
+					)}
 				</div>
 			</div>
 
-			{/* Error */}
-			{error && (
-				<p className="font-body text-xs font-medium text-red-500">{error}</p>
+			{/* Root Error */}
+			{errors.root && (
+				<p className="font-body text-xs font-medium text-red-500">
+					{errors.root.message}
+				</p>
 			)}
 
 			{/* Actions */}
@@ -124,10 +148,10 @@ export default function SignInPage() {
 					variant="primary"
 					size="lg"
 					className="w-full"
-					disabled={loading}
+					disabled={isLoading}
 				>
 					<LogIn className="h-3.5 w-3.5" />
-					{loading ? "SIGNING IN..." : "SIGN IN"}
+					{isLoading ? "SIGNING IN..." : "SIGN IN"}
 				</Button>
 
 				<div className="flex w-full items-center gap-3">
