@@ -1,9 +1,13 @@
+import { identifyRaidInstance } from "./wow-raids";
+
 export type DetectedRaid = {
 	dates: string[];
 	startTime: string;
 	endTime: string;
 	playerCount: number;
 	playerNames: string[];
+	npcNames: string[];
+	raidInstance: string | null;
 };
 
 export type ScanProgress = {
@@ -31,6 +35,7 @@ export type DateGroup = {
 	/** ISO-8601 string (e.g. "2026-02-12T01:30:00.000Z"). Must be ISO for correct comparison. */
 	lastTimestamp: string;
 	players: Map<string, string>;
+	npcs: Map<string, string>;
 };
 
 const JACCARD_THRESHOLD = 0.5;
@@ -149,11 +154,22 @@ function buildDetectedRaid(group: DateGroup[]): DetectedRaid {
 
 	const uniqueNames = [...new Set(allPlayers.values())];
 
+	const allNpcs = new Map<string, string>();
+	for (const dg of group) {
+		for (const [guid, name] of dg.npcs) {
+			allNpcs.set(guid, name);
+		}
+	}
+	const uniqueNpcNames = [...new Set(allNpcs.values())];
+	const raidInstance = identifyRaidInstance(uniqueNpcNames);
+
 	return {
 		dates,
 		startTime: startTime.toISOString(),
 		endTime: endTime.toISOString(),
 		playerCount: uniqueNames.length,
 		playerNames: uniqueNames,
+		npcNames: uniqueNpcNames,
+		raidInstance,
 	};
 }

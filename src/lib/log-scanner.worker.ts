@@ -20,6 +20,7 @@ self.onmessage = async (e: MessageEvent<{ file: File }>) => {
 				firstTimestamp: Date;
 				lastTimestamp: Date;
 				players: Map<string, string>;
+				npcs: Map<string, string>;
 			}
 		>();
 
@@ -72,6 +73,7 @@ self.onmessage = async (e: MessageEvent<{ file: File }>) => {
 				firstTimestamp: group.firstTimestamp.toISOString(),
 				lastTimestamp: group.lastTimestamp.toISOString(),
 				players: group.players,
+				npcs: group.npcs,
 			});
 		}
 
@@ -97,7 +99,12 @@ function processLine(
 	line: string,
 	dateMap: Map<
 		string,
-		{ firstTimestamp: Date; lastTimestamp: Date; players: Map<string, string> }
+		{
+			firstTimestamp: Date;
+			lastTimestamp: Date;
+			players: Map<string, string>;
+			npcs: Map<string, string>;
+		}
 	>,
 ): void {
 	// Line format: "M/D HH:MM:SS.mmm  EVENT_TYPE,..."
@@ -122,6 +129,7 @@ function processLine(
 			firstTimestamp: timestamp,
 			lastTimestamp: timestamp,
 			players: new Map(),
+			npcs: new Map(),
 		};
 		dateMap.set(dateStr, group);
 	} else {
@@ -149,6 +157,18 @@ function processLine(
 	}
 	if (destGuid?.startsWith("0x0E") && destName && destName !== "nil") {
 		group.players.set(destGuid, destName);
+	}
+
+	// Collect NPC GUIDs (creatures and game objects)
+	if (sourceGuid?.startsWith("0xF130") || sourceGuid?.startsWith("0xF150")) {
+		if (sourceName && sourceName !== "nil") {
+			group.npcs.set(sourceGuid, sourceName);
+		}
+	}
+	if (destGuid?.startsWith("0xF130") || destGuid?.startsWith("0xF150")) {
+		if (destName && destName !== "nil") {
+			group.npcs.set(destGuid, destName);
+		}
 	}
 }
 
