@@ -1,8 +1,8 @@
-import { Sword, Upload, User } from "lucide-react";
+import { Sword, User } from "lucide-react";
 import { CoreSwitcher } from "@/components/core-switcher";
 import { NavLinks } from "@/components/nav-links";
 import { SignOutButton } from "@/components/sign-out-button";
-import { Button } from "@/components/ui/button";
+import { UploadLogDialog } from "@/components/upload-log-dialog";
 
 type Core = {
 	id: string;
@@ -48,11 +48,8 @@ export const Sidebar = ({ user, cores, activeCoreId }: SidebarProps) => {
 					<CoreSwitcher cores={cores} activeCoreId={activeCoreId} />
 				</div>
 
-				{/* Upload button (placeholder) */}
-				<Button className="w-full">
-					<Upload className="size-3.5" />
-					Upload Log
-				</Button>
+				{/* Upload log */}
+				<UploadLogDialog />
 
 				{/* User profile */}
 				<div className="flex items-center gap-2.5 border-t border-border pt-3">
