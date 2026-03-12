@@ -13,8 +13,22 @@ import { ItemTooltip } from "@/components/item-tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+	DialogClose,
+	DialogContent,
+	DialogDescription,
+	DialogRoot,
+	DialogTitle,
+	DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { NavItem } from "@/components/ui/nav-item";
+import {
+	PopoverClose,
+	PopoverContent,
+	PopoverRoot,
+	PopoverTrigger,
+} from "@/components/ui/popover";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import {
 	SelectItem,
@@ -238,6 +252,59 @@ export const Showcase = () => {
 								</span>
 							</ItemTooltip>
 						</div>
+					</Section>
+
+					<Section title="Popover">
+						<PopoverRoot>
+							<PopoverTrigger render={<span />}>
+								<Button variant="secondary">Open Popover</Button>
+							</PopoverTrigger>
+							<PopoverContent side="bottom" align="start">
+								<span className="px-3 py-1.5 font-body text-xs text-secondary">
+									Raid Actions
+								</span>
+								<button
+									type="button"
+									className="px-3 py-1.5 text-left font-body text-sm text-primary hover:bg-surface"
+								>
+									View Details
+								</button>
+								<button
+									type="button"
+									className="px-3 py-1.5 text-left font-body text-sm text-primary hover:bg-surface"
+								>
+									Export Log
+								</button>
+								<PopoverClose className="px-3 py-1.5 text-left font-body text-sm text-danger hover:bg-surface">
+									Remove
+								</PopoverClose>
+							</PopoverContent>
+						</PopoverRoot>
+					</Section>
+
+					<Section title="Dialog">
+						<DialogRoot>
+							<DialogTrigger render={<span />}>
+								<Button variant="secondary">Open Dialog</Button>
+							</DialogTrigger>
+							<DialogContent>
+								<div className="flex flex-col gap-2">
+									<DialogTitle>Delete Raid Log</DialogTitle>
+									<DialogDescription>
+										Are you sure you want to delete this raid log? This action
+										cannot be undone.
+									</DialogDescription>
+								</div>
+								<div className="flex justify-end gap-3">
+									<DialogClose render={<span />}>
+										<Button variant="secondary">Cancel</Button>
+									</DialogClose>
+									<DialogClose render={<span />}>
+										<Button>Confirm</Button>
+									</DialogClose>
+								</div>
+							</DialogContent>
+						</DialogRoot>
 					</Section>
 				</div>
 			</div>
