@@ -119,9 +119,9 @@ export function CreateCoreForm({ onSuccessAction }: CreateCoreFormProps) {
 					>
 						<SelectTrigger placeholder="Select a realm" className="w-full" />
 						<SelectPopup>
-							<SelectItem value="icecrown">Icecrown</SelectItem>
-							<SelectItem value="lordaeron">Lordaeron</SelectItem>
-							<SelectItem value="onyxia">Onyxia</SelectItem>
+							<SelectItem value="icecrown">Icecrown (Warmane)</SelectItem>
+							<SelectItem value="lordaeron">Lordaeron (Warmane)</SelectItem>
+							<SelectItem value="onyxia">Onyxia (Warmane)</SelectItem>
 						</SelectPopup>
 					</SelectRoot>
 				</div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
+import { X } from "lucide-react";
 import { twMerge } from "tailwind-merge";
 
 export type DialogRootProps = {
@@ -54,6 +55,9 @@ export const DialogContent = ({ className, children }: DialogContentProps) => {
 					className,
 				)}
 			>
+				<BaseDialog.Close className="absolute top-4 right-4 cursor-pointer text-dimmed outline-none transition-colors hover:text-primary">
+					<X className="size-4" />
+				</BaseDialog.Close>
 				{children}
 			</BaseDialog.Popup>
 		</BaseDialog.Portal>
@@ -69,7 +73,7 @@ export const DialogTitle = ({ className, children }: DialogTitleProps) => {
 	return (
 		<BaseDialog.Title
 			className={twMerge(
-				"font-heading text-lg font-semibold text-primary",
+				"font-heading text-lg font-semibold uppercase text-primary",
 				className,
 			)}
 		>

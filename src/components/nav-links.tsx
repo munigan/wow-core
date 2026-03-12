@@ -1,21 +1,14 @@
 "use client";
 
-import {
-	LayoutDashboard,
-	Shield,
-	Swords,
-	TrendingUp,
-	Users,
-} from "lucide-react";
+import { LayoutDashboard, Shield, Swords, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { NavItem } from "@/components/ui/nav-item";
 
 const NAV_ITEMS = [
 	{ href: "/", label: "Overview", icon: LayoutDashboard },
-	{ href: "/raids", label: "Raid Details", icon: Swords },
+	{ href: "/raids", label: "Raids", icon: Swords },
 	{ href: "/members", label: "Members", icon: Users },
 	{ href: "/gear", label: "Gear & Enchants", icon: Shield },
-	{ href: "/trends", label: "Trends", icon: TrendingUp },
 ] as const;
 
 export const NavLinks = () => {
