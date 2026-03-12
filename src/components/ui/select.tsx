@@ -4,9 +4,15 @@ import { Select as BaseSelect } from "@base-ui/react/select";
 import { Check, ChevronDown } from "lucide-react";
 import { twMerge } from "tailwind-merge";
 
+export type SelectOption = {
+	value: string;
+	label: string;
+};
+
 export type SelectRootProps = {
 	defaultValue?: string;
 	value?: string;
+	items?: SelectOption[];
 	onValueChangeAction?: (value: string | null) => void;
 	children: React.ReactNode;
 };
@@ -14,6 +20,7 @@ export type SelectRootProps = {
 export const SelectRoot = ({
 	defaultValue,
 	value,
+	items,
 	onValueChangeAction,
 	children,
 }: SelectRootProps) => {
@@ -21,6 +28,7 @@ export const SelectRoot = ({
 		<BaseSelect.Root
 			defaultValue={defaultValue}
 			value={value}
+			items={items}
 			onValueChange={onValueChangeAction}
 		>
 			{children}

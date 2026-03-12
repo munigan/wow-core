@@ -383,6 +383,7 @@ export function UploadLogForm({
 	// Step: choose
 	if (state.step === "choose") {
 		const { raids, raidConfigs } = state;
+		const coreItems = cores.map((c) => ({ value: c.id, label: c.name }));
 
 		const handleToggleRaid = (index: number) => {
 			setState((prev) => {
@@ -466,6 +467,7 @@ export function UploadLogForm({
 								<div className="flex shrink-0 items-center gap-1.5">
 									<SelectRoot
 										value={config.coreId}
+										items={coreItems}
 										onValueChangeAction={(value) =>
 											handleCoreChange(index, value)
 										}
