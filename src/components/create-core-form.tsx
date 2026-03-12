@@ -70,11 +70,9 @@ export function CreateCoreForm({ onSuccessAction }: CreateCoreFormProps) {
 		const result = await authClient.organization.create({
 			name: data.name,
 			slug,
-			metadata: {
-				realm: data.realm,
-				raidSize: data.raidSize,
-			},
-		});
+			realm: data.realm,
+			raidSize: data.raidSize,
+		} as Parameters<typeof authClient.organization.create>[0]);
 
 		if (result.error) {
 			setError("root", {
