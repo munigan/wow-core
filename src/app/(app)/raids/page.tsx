@@ -8,7 +8,7 @@ export default function RaidsPage() {
 	return (
 		<div className="flex flex-col gap-8 p-8">
 			<div className="flex flex-col gap-1">
-				<h1 className="font-heading text-4xl font-bold text-primary">
+				<h1 className="font-heading text-4xl font-bold uppercase text-primary">
 					Raid Details
 				</h1>
 				<p className="font-body text-sm text-secondary">
