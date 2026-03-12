@@ -7,18 +7,18 @@ import { raidMembers } from "@/lib/db/schema/raid-members";
 import { raids } from "@/lib/db/schema/raids";
 import { parseLogStream, parseLogStreamMulti } from "@/lib/log-parser";
 
+type SelectedRaidPayload = {
+	dates: string[];
+	coreId: string;
+	raidName: string;
+};
+
 export async function POST(request: Request) {
 	const requestHeaders = await headers();
 	const session = await auth.api.getSession({ headers: requestHeaders });
 
 	if (!session) {
 		return Response.json({ error: "Unauthorized" }, { status: 401 });
-	}
-
-	const coreId =
-		requestHeaders.get("X-Core-Id") ?? session.session.activeOrganizationId;
-	if (!coreId) {
-		return Response.json({ error: "No active core" }, { status: 400 });
 	}
 
 	const body = request.body;
@@ -31,7 +31,10 @@ export async function POST(request: Request) {
 	try {
 		// Multi-raid flow
 		if (selectedRaidsHeader) {
-			const selectedDateGroups: string[][] = JSON.parse(selectedRaidsHeader);
+			const selectedRaids: SelectedRaidPayload[] =
+				JSON.parse(selectedRaidsHeader);
+
+			const selectedDateGroups = selectedRaids.map((r) => r.dates);
 			const multiResult = await parseLogStreamMulti(body, selectedDateGroups);
 
 			if (multiResult.raids.length === 0) {
@@ -41,66 +44,72 @@ export async function POST(request: Request) {
 				);
 			}
 
-			// Collect all unique player names across all raids for a single batch upsert
-			const allPlayerNames = new Set<string>();
-			for (const raid of multiResult.raids) {
-				for (const player of raid.players) {
-					allPlayerNames.add(player.name);
+			// Group player names by coreId for per-core batch upserts
+			const playersByCore = new Map<string, Set<string>>();
+			for (let i = 0; i < multiResult.raids.length; i++) {
+				const raidCoreId = selectedRaids[i].coreId;
+				let nameSet = playersByCore.get(raidCoreId);
+				if (!nameSet) {
+					nameSet = new Set();
+					playersByCore.set(raidCoreId, nameSet);
+				}
+				for (const player of multiResult.raids[i].players) {
+					nameSet.add(player.name);
 				}
 			}
 
-			const uniqueNames = Array.from(allPlayerNames);
+			// Per-core member upserts + lookups
+			const memberByCoreAndName = new Map<string, Map<string, string>>();
+			const newMembersByCore = new Map<string, number>();
 
-			if (uniqueNames.length === 0) {
-				return Response.json(
-					{ error: "No players found in log file" },
-					{ status: 400 },
+			for (const [raidCoreId, playerNames] of playersByCore) {
+				const names = Array.from(playerNames);
+				if (names.length === 0) continue;
+
+				const inserted = await db
+					.insert(members)
+					.values(names.map((name) => ({ coreId: raidCoreId, name })))
+					.onConflictDoNothing()
+					.returning({ id: members.id });
+
+				newMembersByCore.set(raidCoreId, inserted.length);
+
+				const coreMembers = await db
+					.select({ id: members.id, name: members.name })
+					.from(members)
+					.where(
+						and(eq(members.coreId, raidCoreId), inArray(members.name, names)),
+					);
+
+				memberByCoreAndName.set(
+					raidCoreId,
+					new Map(coreMembers.map((m) => [m.name, m.id])),
 				);
 			}
 
-			// Query 1: Batch upsert all members across all raids
-			const inserted = await db
-				.insert(members)
-				.values(uniqueNames.map((name) => ({ coreId, name })))
-				.onConflictDoNothing()
-				.returning({ id: members.id });
-
-			const newMemberCount = inserted.length;
-
-			// Query 2: Fetch all member IDs + names for linking
-			const allMembers = await db
-				.select({ id: members.id, name: members.name })
-				.from(members)
-				.where(
-					and(eq(members.coreId, coreId), inArray(members.name, uniqueNames)),
-				);
-
-			const memberByName = new Map(allMembers.map((m) => [m.name, m.id]));
-
-			// Process each raid
+			// Create raid records with per-raid coreId and payload raidName
 			const results = [];
 
-			for (const raidData of multiResult.raids) {
-				// Query 3 (per raid): Create raid record
+			for (let i = 0; i < multiResult.raids.length; i++) {
+				const raidData = multiResult.raids[i];
+				const raidPayload = selectedRaids[i];
+				const raidCoreId = raidPayload.coreId;
+				const memberMap =
+					memberByCoreAndName.get(raidCoreId) ?? new Map<string, string>();
+
 				const [raid] = await db
 					.insert(raids)
 					.values({
-						coreId,
-						name: raidData.raidName,
+						coreId: raidCoreId,
+						name: raidPayload.raidName,
 						date: raidData.raidDate,
 					})
 					.returning();
 
-				// Resolve member IDs for this raid's players
-				const raidMemberIds: string[] = [];
-				for (const player of raidData.players) {
-					const memberId = memberByName.get(player.name);
-					if (memberId) {
-						raidMemberIds.push(memberId);
-					}
-				}
+				const raidMemberIds = raidData.players
+					.map((p) => memberMap.get(p.name))
+					.filter((id): id is string => id != null);
 
-				// Query 4 (per raid): Batch insert raid members
 				if (raidMemberIds.length > 0) {
 					await db
 						.insert(raidMembers)
@@ -118,7 +127,7 @@ export async function POST(request: Request) {
 					raidName: raid.name,
 					raidDate: raid.date,
 					totalMembers: raidMemberIds.length,
-					newMembers: newMemberCount,
+					newMembers: newMembersByCore.get(raidCoreId) ?? 0,
 				});
 			}
 
@@ -126,6 +135,11 @@ export async function POST(request: Request) {
 		}
 
 		// Single-raid flow (backward compat)
+		const coreId = session.session.activeOrganizationId;
+		if (!coreId) {
+			return Response.json({ error: "No active core" }, { status: 400 });
+		}
+
 		const result = await parseLogStream(body);
 
 		if (result.players.length === 0) {
