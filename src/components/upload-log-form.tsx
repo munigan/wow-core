@@ -109,6 +109,47 @@ function computeOverlap(
 	return matchCount / coreMembers.length;
 }
 
+type DuplicateInfo = {
+	isDuplicate: boolean;
+	existingName?: string;
+	existingDate?: string;
+};
+
+function checkLikelyDuplicate(
+	raid: DetectedRaid,
+	coreId: string,
+	existingRaids: { coreId: string; name: string; date: Date | string }[],
+): DuplicateInfo {
+	const raidInstance = raid.raidInstance;
+	if (!raidInstance) return { isDuplicate: false };
+
+	const raidStartDate = new Date(raid.startTime);
+	const oneDayMs = 1000 * 60 * 60 * 24;
+
+	for (const existing of existingRaids) {
+		if (existing.coreId !== coreId) continue;
+
+		const existingName = existing.name.toLowerCase();
+		if (!existingName.includes(raidInstance.toLowerCase())) continue;
+
+		const existingDate = new Date(existing.date);
+		const dayDiff =
+			Math.abs(raidStartDate.getTime() - existingDate.getTime()) / oneDayMs;
+		if (dayDiff <= 1) {
+			return {
+				isDuplicate: true,
+				existingName: existing.name,
+				existingDate: existingDate.toLocaleDateString("en-US", {
+					month: "long",
+					day: "numeric",
+				}),
+			};
+		}
+	}
+
+	return { isDuplicate: false };
+}
+
 export function UploadLogForm({
 	cores,
 	activeCoreId,
@@ -121,8 +162,14 @@ export function UploadLogForm({
 	const fileRef = useRef<File | null>(null);
 	const inputRef = useRef<HTMLInputElement | null>(null);
 	const hasAppliedDefaultsRef = useRef(false);
+	const hasAppliedDuplicateDefaultsRef = useRef(false);
 
 	const membersQuery = trpc.members.listByCores.useQuery(
+		{ coreIds: cores.map((c) => c.id) },
+		{ enabled: state.step === "choose" },
+	);
+
+	const existingRaidsQuery = trpc.raids.listByCores.useQuery(
 		{ coreIds: cores.map((c) => c.id) },
 		{ enabled: state.step === "choose" },
 	);
@@ -177,6 +224,33 @@ export function UploadLogForm({
 		});
 	}, [state.step, membersByCore, cores, activeCoreId]);
 
+	// Uncheck likely-duplicate raids when existing raids data arrives (runs once per scan)
+	useEffect(() => {
+		if (state.step !== "choose") return;
+		if (hasAppliedDuplicateDefaultsRef.current) return;
+		if (!existingRaidsQuery.data) return;
+
+		hasAppliedDuplicateDefaultsRef.current = true;
+
+		setState((prev) => {
+			if (prev.step !== "choose") return prev;
+
+			const updatedConfigs = prev.raidConfigs.map((config, i) => {
+				const raid = prev.raids[i];
+				if (!raid) return config;
+				const { isDuplicate } = checkLikelyDuplicate(
+					raid,
+					config.coreId,
+					existingRaidsQuery.data,
+				);
+				if (isDuplicate) return { ...config, isSelected: false };
+				return config;
+			});
+
+			return { ...prev, raidConfigs: updatedConfigs };
+		});
+	}, [state.step, existingRaidsQuery.data]);
+
 	// Cleanup worker on unmount
 	useEffect(() => {
 		return () => {
@@ -193,6 +267,7 @@ export function UploadLogForm({
 
 			fileRef.current = file;
 			hasAppliedDefaultsRef.current = false;
+			hasAppliedDuplicateDefaultsRef.current = false;
 			setState({ step: "scanning", progress: 0 });
 
 			const worker = new Worker(
@@ -422,9 +497,17 @@ export function UploadLogForm({
 						const overlap = computeOverlap(raid.playerNames, coreMembers);
 						const isMismatch = overlap < 0.3;
 
+						const duplicateInfo = existingRaidsQuery.data
+							? checkLikelyDuplicate(
+									raid,
+									config.coreId,
+									existingRaidsQuery.data,
+								)
+							: { isDuplicate: false };
+
 						return (
 							<div
-								key={raid.dates.join("-")}
+								key={`${raid.startTime}-${raid.endTime}`}
 								className="flex items-start gap-2.5 border border-border px-3 py-2.5"
 							>
 								<CheckboxRoot
@@ -433,9 +516,27 @@ export function UploadLogForm({
 									className="mt-0.5"
 								/>
 								<div className="flex min-w-0 flex-1 flex-col gap-1">
-									<span className="font-body text-xs font-semibold text-primary">
-										{formatRaidLabel(raid)}
-									</span>
+									<div className="flex items-center gap-1.5">
+										<span className="font-body text-xs font-semibold text-primary">
+											{formatRaidLabel(raid)}
+										</span>
+										{duplicateInfo.isDuplicate && (
+											<TooltipRoot>
+												<TooltipTrigger render={<span />}>
+													<span className="cursor-default font-body text-2xs text-warning">
+														Likely duplicate
+													</span>
+												</TooltipTrigger>
+												<TooltipContent side="top">
+													<span className="font-body text-2xs text-primary">
+														&quot;{duplicateInfo.existingName}&quot; on{" "}
+														{duplicateInfo.existingDate} already exists in this
+														core
+													</span>
+												</TooltipContent>
+											</TooltipRoot>
+										)}
+									</div>
 									<span className="font-body text-2xs text-dimmed">
 										{formatTimeRange(raid)}
 									</span>
