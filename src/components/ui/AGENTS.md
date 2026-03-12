@@ -36,6 +36,7 @@ All tooltips use collision avoidance (`side: "flip"`, `align: "shift"`, `collisi
 
 | Component | Pattern | Styling |
 |---|---|---|
+| `alert` | single export | tailwind-variants (`error`/`warning`/`success`) |
 | `button` | single export | tailwind-variants (`primary`/`secondary`, `default`/`lg`) |
 | `badge` | single export | tailwind-variants (`success`/`warning`/`error`) |
 | `card` | single export | tailwind-merge |
@@ -45,3 +46,24 @@ All tooltips use collision avoidance (`side: "flip"`, `align: "shift"`, `collisi
 | `tabs` | compound: `Tabs`, `TabList`, `Tab`, `TabPanel` | base-ui + tailwind-merge |
 | `progress-bar` | single export | base-ui + tailwind-merge |
 | `tooltip` | compound: `TooltipProvider`, `TooltipRoot`, `TooltipTrigger`, `TooltipContent`, `TooltipLabel`, `TooltipValue` | base-ui + tailwind-merge |
+
+## Alert
+
+Inline alert banner for form errors and status messages. Design follows the `shareLinkRow` pattern from the Pencil design file — bordered box with tinted background, icon, and text.
+
+- **Variants**: `error` (red, default), `warning` (orange), `success` (green)
+- **Props**: `message` (string, required), `variant`, plus native `<div>` props
+- **Icons**: Auto-selected per variant (AlertTriangle, Info, CheckCircle)
+- **Form usage**: Place at the top of the form (after the logo, before fields). Collect all field-level and root-level errors into a single `firstError` string; show only the first error.
+
+```tsx
+const firstError =
+  errors.root?.message ??
+  errors.email?.message ??
+  errors.password?.message ??
+  "";
+const hasErrors = firstError !== "";
+
+// In JSX, before form fields:
+{hasErrors && <Alert message={firstError} />}
+```

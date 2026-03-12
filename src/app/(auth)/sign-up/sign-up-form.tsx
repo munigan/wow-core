@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
@@ -32,6 +33,14 @@ export function SignUpForm() {
 	} = useForm<SignUpForm>({
 		resolver: zodResolver(signUpSchema),
 	});
+
+	const firstError =
+		errors.root?.message ??
+		errors.email?.message ??
+		errors.password?.message ??
+		errors.name?.message ??
+		"";
+	const hasErrors = firstError !== "";
 
 	async function onSubmitAction(data: SignUpForm) {
 		setIsLoading(true);
@@ -77,21 +86,19 @@ export function SignUpForm() {
 				</span>
 			</div>
 
+			{/* Error Alert */}
+			{hasErrors && (
+				<Alert message={firstError} />
+			)}
+
 			{/* Form Fields */}
 			<div className="flex flex-col gap-4">
-				<div className="flex flex-col gap-1.5">
-					<Input
-						label="EMAIL OR BATTLE.NET ID"
-						type="email"
-						placeholder="arthas@frostmourne.gg"
-						{...register("email")}
-					/>
-					{errors.email && (
-						<p className="font-body text-2xs font-medium text-red-500">
-							{errors.email.message}
-						</p>
-					)}
-				</div>
+				<Input
+					label="EMAIL OR BATTLE.NET ID"
+					type="email"
+					placeholder="arthas@frostmourne.gg"
+					{...register("email")}
+				/>
 
 				<div className="flex flex-col gap-1.5">
 					<label
@@ -120,34 +127,15 @@ export function SignUpForm() {
 							)}
 						</button>
 					</div>
-					{errors.password && (
-						<p className="font-body text-2xs font-medium text-red-500">
-							{errors.password.message}
-						</p>
-					)}
 				</div>
 
-				<div className="flex flex-col gap-1.5">
-					<Input
-						label="CHARACTER NAME"
-						type="text"
-						placeholder="e.g. Arthás"
-						{...register("name")}
-					/>
-					{errors.name && (
-						<p className="font-body text-2xs font-medium text-red-500">
-							{errors.name.message}
-						</p>
-					)}
-				</div>
+				<Input
+					label="CHARACTER NAME"
+					type="text"
+					placeholder="e.g. Arthás"
+					{...register("name")}
+				/>
 			</div>
-
-			{/* Root Error */}
-			{errors.root && (
-				<p className="font-body text-xs font-medium text-red-500">
-					{errors.root.message}
-				</p>
-			)}
 
 			{/* Actions */}
 			<div className="flex flex-col items-center gap-3">
