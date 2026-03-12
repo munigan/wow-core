@@ -75,6 +75,13 @@ self.onmessage = async (e: MessageEvent<{ file: File }>) => {
 			});
 		}
 
+		// Send final progress so UI reaches 100% before switching to done
+		self.postMessage({
+			type: "progress",
+			bytesRead: totalBytes,
+			totalBytes,
+		} satisfies ScanProgress);
+
 		const raids = detectRaids(dateGroups);
 
 		self.postMessage({ type: "done", raids } satisfies ScanDone);
@@ -127,6 +134,7 @@ function processLine(
 	}
 
 	// Extract player GUIDs from event fields
+	// Minimum 7 fields: EVENT_TYPE, sourceGUID, sourceName, sourceFlags, destGUID, destName, destFlags
 	const eventPart = line.slice(doubleSpaceIdx + 2);
 	const fields = parseFields(eventPart);
 	if (fields.length < 7) return;
