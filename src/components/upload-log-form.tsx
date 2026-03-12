@@ -75,13 +75,15 @@ export function UploadLogForm({
 		{ enabled: state.step === "choose" && selectedCoreId != null },
 	);
 
+	const chooseState = state.step === "choose" ? state : null;
+
 	const mismatchWarning = useMemo(() => {
-		if (state.step !== "choose") return null;
+		if (!chooseState) return null;
 		const existingMembers = membersQuery.data;
 		if (!existingMembers || existingMembers.length === 0) return null;
 
-		const selectedRaids = state.raids.filter((_, i) =>
-			state.selectedRaidIndices.has(i),
+		const selectedRaids = chooseState.raids.filter((_, i) =>
+			chooseState.selectedRaidIndices.has(i),
 		);
 		const detectedNames = new Set(
 			selectedRaids.flatMap((r) => r.playerNames.map((n) => n.toLowerCase())),
@@ -97,7 +99,7 @@ export function UploadLogForm({
 			return `Only ${Math.round(overlap * 100)}% of this core's members were found in the selected raids. You may have selected the wrong core.`;
 		}
 		return null;
-	}, [state, membersQuery.data]);
+	}, [chooseState, membersQuery.data]);
 
 	// Cleanup worker on unmount
 	useEffect(() => {
@@ -109,6 +111,10 @@ export function UploadLogForm({
 
 	const handleScan = useCallback(
 		(file: File) => {
+			// Terminate any existing worker before starting a new scan
+			workerRef.current?.terminate();
+			workerRef.current = null;
+
 			fileRef.current = file;
 			setState({ step: "scanning", progress: 0 });
 
