@@ -12,7 +12,7 @@ const caller = createCallerFactory(appRouter)(async () =>
 	createTRPCContext({ headers: await headers() }),
 );
 
-// Empty router causes AnyRouter to match TRouter; resolves when procedures are added
-export const { trpc, HydrateClient } =
-	// @ts-expect-error - empty router type workaround
-	createHydrationHelpers<typeof appRouter>(caller, getQueryClient);
+export const { trpc, HydrateClient } = createHydrationHelpers<typeof appRouter>(
+	caller,
+	getQueryClient,
+);
