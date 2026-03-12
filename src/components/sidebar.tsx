@@ -1,13 +1,14 @@
 import { Sword, Upload, User } from "lucide-react";
+import { CoreSwitcher } from "@/components/core-switcher";
 import { NavLinks } from "@/components/nav-links";
 import { SignOutButton } from "@/components/sign-out-button";
 import { Button } from "@/components/ui/button";
-import {
-	SelectItem,
-	SelectPopup,
-	SelectRoot,
-	SelectTrigger,
-} from "@/components/ui/select";
+
+type Core = {
+	id: string;
+	name: string;
+	slug: string;
+};
 
 type SidebarUser = {
 	name: string;
@@ -16,9 +17,11 @@ type SidebarUser = {
 
 type SidebarProps = {
 	user: SidebarUser;
+	cores: Core[];
+	activeCoreId: string | null;
 };
 
-export const Sidebar = ({ user }: SidebarProps) => {
+export const Sidebar = ({ user, cores, activeCoreId }: SidebarProps) => {
 	return (
 		<aside className="flex h-screen w-60 shrink-0 flex-col border-r border-border bg-sidebar">
 			{/* Logo */}
@@ -37,17 +40,12 @@ export const Sidebar = ({ user }: SidebarProps) => {
 
 			{/* Bottom section */}
 			<div className="flex flex-col gap-3 border-t border-border px-5 py-4">
-				{/* Core selector (placeholder) */}
+				{/* Core selector */}
 				<div className="flex flex-col gap-1">
 					<span className="font-body text-2xs font-bold uppercase tracking-wide text-dimmed">
 						{"// Active Core"}
 					</span>
-					<SelectRoot defaultValue="frostmourne">
-						<SelectTrigger className="w-full" />
-						<SelectPopup>
-							<SelectItem value="frostmourne">Frostmourne_25H</SelectItem>
-						</SelectPopup>
-					</SelectRoot>
+					<CoreSwitcher cores={cores} activeCoreId={activeCoreId} />
 				</div>
 
 				{/* Upload button (placeholder) */}
