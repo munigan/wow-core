@@ -26,10 +26,22 @@ export type ScanMessage = ScanProgress | ScanDone | ScanError;
 
 export type DateGroup = {
 	date: string;
+	/** ISO-8601 string (e.g. "2026-02-11T20:00:00.000Z"). Must be ISO for correct comparison. */
 	firstTimestamp: string;
+	/** ISO-8601 string (e.g. "2026-02-12T01:30:00.000Z"). Must be ISO for correct comparison. */
 	lastTimestamp: string;
 	players: Map<string, string>;
 };
+
+const JACCARD_THRESHOLD = 0.5;
+
+/**
+ * Parse a WoW combat log date ("M/D") into a Date at midnight,
+ * using the current year.
+ */
+export function parseDateKey(dateStr: string): Date {
+	return parseDateTimestamp(dateStr, "00:00:00.000");
+}
 
 /**
  * Parse a WoW combat log date ("M/D") and time ("HH:MM:SS.mmm") into a Date
@@ -56,7 +68,7 @@ export function parseDateTimestamp(dateStr: string, timeStr: string): Date {
  * Compute the Jaccard similarity between two sets of player GUIDs.
  * Returns a value between 0 and 1.
  */
-function jaccardSimilarity(
+export function jaccardSimilarity(
 	a: Map<string, string>,
 	b: Map<string, string>,
 ): number {
@@ -66,11 +78,11 @@ function jaccardSimilarity(
 	const smaller = a.size <= b.size ? a : b;
 	const larger = a.size <= b.size ? b : a;
 
-	smaller.forEach((_value, key) => {
+	for (const key of smaller.keys()) {
 		if (larger.has(key)) {
 			intersectionSize++;
 		}
-	});
+	}
 
 	const unionSize = a.size + b.size - intersectionSize;
 	if (unionSize === 0) return 1;
@@ -80,27 +92,31 @@ function jaccardSimilarity(
 
 /**
  * Detect raids from an array of DateGroups by grouping consecutive dates
- * with similar player rosters (Jaccard similarity > 0.5).
+ * with similar player rosters (Jaccard similarity > threshold).
  *
- * Expects dateGroups to be sorted chronologically.
+ * Sorts dateGroups chronologically before processing.
  */
 export function detectRaids(dateGroups: DateGroup[]): DetectedRaid[] {
 	if (dateGroups.length === 0) return [];
 
-	const raidGroups: DateGroup[][] = [[dateGroups[0]]];
+	const sorted = [...dateGroups].sort(
+		(a, b) => parseDateKey(a.date).getTime() - parseDateKey(b.date).getTime(),
+	);
 
-	for (let i = 1; i < dateGroups.length; i++) {
+	const raidGroups: DateGroup[][] = [[sorted[0]]];
+
+	for (let i = 1; i < sorted.length; i++) {
 		const currentGroup = raidGroups[raidGroups.length - 1];
 		const lastDateGroup = currentGroup[currentGroup.length - 1];
 		const similarity = jaccardSimilarity(
 			lastDateGroup.players,
-			dateGroups[i].players,
+			sorted[i].players,
 		);
 
-		if (similarity > 0.5) {
-			currentGroup.push(dateGroups[i]);
+		if (similarity > JACCARD_THRESHOLD) {
+			currentGroup.push(sorted[i]);
 		} else {
-			raidGroups.push([dateGroups[i]]);
+			raidGroups.push([sorted[i]]);
 		}
 	}
 
@@ -109,31 +125,34 @@ export function detectRaids(dateGroups: DateGroup[]): DetectedRaid[] {
 
 function buildDetectedRaid(group: DateGroup[]): DetectedRaid {
 	const dates: string[] = [];
-	let startTime = group[0].firstTimestamp;
-	let endTime = group[0].lastTimestamp;
+	let startTime = new Date(group[0].firstTimestamp);
+	let endTime = new Date(group[0].lastTimestamp);
 	const allPlayers = new Map<string, string>();
 
 	for (const dg of group) {
 		dates.push(dg.date);
 
-		if (dg.firstTimestamp < startTime) {
-			startTime = dg.firstTimestamp;
+		const dgStart = new Date(dg.firstTimestamp);
+		const dgEnd = new Date(dg.lastTimestamp);
+
+		if (dgStart.getTime() < startTime.getTime()) {
+			startTime = dgStart;
 		}
-		if (dg.lastTimestamp > endTime) {
-			endTime = dg.lastTimestamp;
+		if (dgEnd.getTime() > endTime.getTime()) {
+			endTime = dgEnd;
 		}
 
-		dg.players.forEach((name, guid) => {
+		for (const [guid, name] of dg.players) {
 			allPlayers.set(guid, name);
-		});
+		}
 	}
 
-	const uniqueNames = Array.from(new Set(Array.from(allPlayers.values())));
+	const uniqueNames = [...new Set(allPlayers.values())];
 
 	return {
 		dates,
-		startTime,
-		endTime,
+		startTime: startTime.toISOString(),
+		endTime: endTime.toISOString(),
 		playerCount: uniqueNames.length,
 		playerNames: uniqueNames,
 	};
