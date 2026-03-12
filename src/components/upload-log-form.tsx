@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle, FileText, Upload, X } from "lucide-react";
+import { AlertTriangle, CheckCircle, FileText, Upload, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "@/components/ui/alert";
@@ -13,6 +13,11 @@ import {
 	SelectRoot,
 	SelectTrigger,
 } from "@/components/ui/select";
+import {
+	TooltipContent,
+	TooltipRoot,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { DetectedRaid, ScanMessage } from "@/lib/log-scanner";
 import { trpc } from "@/lib/trpc/client";
 
@@ -24,15 +29,15 @@ type UploadResult = {
 	newMembers: number;
 };
 
+type RaidConfig = {
+	isSelected: boolean;
+	coreId: string;
+};
+
 type UploadState =
 	| { step: "select" }
 	| { step: "scanning"; progress: number }
-	| {
-			step: "choose";
-			raids: DetectedRaid[];
-			selectedCoreId: string;
-			selectedRaidIndices: Set<number>;
-	  }
+	| { step: "choose"; raids: DetectedRaid[]; raidConfigs: RaidConfig[] }
 	| { step: "uploading"; fileName: string; fileSize: number; progress: number }
 	| { step: "error"; message: string }
 	| { step: "done"; results: UploadResult[] };
@@ -48,12 +53,60 @@ function formatSize(bytes: number): string {
 	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function formatRaidLabel(raid: DetectedRaid): string {
-	const dates = raid.dates;
-	if (dates.length === 1) {
-		return `Raid ${dates[0]}`;
+function getOrdinalSuffix(day: number): string {
+	if (day >= 11 && day <= 13) return "th";
+	switch (day % 10) {
+		case 1:
+			return "st";
+		case 2:
+			return "nd";
+		case 3:
+			return "rd";
+		default:
+			return "th";
 	}
-	return `Raid ${dates[0]} - ${dates[dates.length - 1]}`;
+}
+
+function formatRaidLabel(raid: DetectedRaid): string {
+	const instance = raid.raidInstance ?? "Raid";
+	const startDate = new Date(raid.startTime);
+	const endDate = new Date(raid.endTime);
+
+	const monthName = startDate.toLocaleDateString("en-US", { month: "long" });
+	const day = startDate.getDate();
+	const ordinal = getOrdinalSuffix(day);
+
+	if (raid.dates.length === 1) {
+		return `${instance} - ${monthName} ${day}${ordinal}`;
+	}
+
+	const endDay = endDate.getDate();
+	const endOrdinal = getOrdinalSuffix(endDay);
+	return `${instance} - ${monthName} ${day}${ordinal} - ${endDay}${endOrdinal}`;
+}
+
+function formatTimeRange(raid: DetectedRaid): string {
+	const start = new Date(raid.startTime);
+	const end = new Date(raid.endTime);
+	const fmt = (d: Date) =>
+		d.toLocaleTimeString("en-US", {
+			hour: "2-digit",
+			minute: "2-digit",
+			hour12: false,
+		});
+	return `${fmt(start)} - ${fmt(end)}`;
+}
+
+function computeOverlap(
+	raidPlayerNames: string[],
+	coreMembers: { name: string }[],
+): number {
+	if (coreMembers.length === 0) return 1; // No members yet, no warning
+	const raidNames = new Set(raidPlayerNames.map((n) => n.toLowerCase()));
+	const matchCount = coreMembers.filter((m) =>
+		raidNames.has(m.name.toLowerCase()),
+	).length;
+	return matchCount / coreMembers.length;
 }
 
 export function UploadLogForm({
@@ -67,39 +120,62 @@ export function UploadLogForm({
 	const workerRef = useRef<Worker | null>(null);
 	const fileRef = useRef<File | null>(null);
 	const inputRef = useRef<HTMLInputElement | null>(null);
+	const hasAppliedDefaultsRef = useRef(false);
 
-	const selectedCoreId = state.step === "choose" ? state.selectedCoreId : null;
-
-	const membersQuery = trpc.members.listByCore.useQuery(
-		{ coreId: selectedCoreId ?? "" },
-		{ enabled: state.step === "choose" && selectedCoreId != null },
+	const membersQuery = trpc.members.listByCores.useQuery(
+		{ coreIds: cores.map((c) => c.id) },
+		{ enabled: state.step === "choose" },
 	);
 
-	const chooseState = state.step === "choose" ? state : null;
-
-	const mismatchWarning = useMemo(() => {
-		if (!chooseState) return null;
-		const existingMembers = membersQuery.data;
-		if (!existingMembers || existingMembers.length === 0) return null;
-
-		const selectedRaids = chooseState.raids.filter((_, i) =>
-			chooseState.selectedRaidIndices.has(i),
-		);
-		const detectedNames = new Set(
-			selectedRaids.flatMap((r) => r.playerNames.map((n) => n.toLowerCase())),
-		);
-
-		const existingNames = existingMembers.map((m) => m.name.toLowerCase());
-		const overlapCount = existingNames.filter((n) =>
-			detectedNames.has(n),
-		).length;
-		const overlap = overlapCount / existingMembers.length;
-
-		if (overlap < 0.3) {
-			return `Only ${Math.round(overlap * 100)}% of this core's members were found in the selected raids. You may have selected the wrong core.`;
+	const membersByCore = useMemo(() => {
+		const map = new Map<string, { name: string }[]>();
+		if (!membersQuery.data) return map;
+		for (const m of membersQuery.data) {
+			const list = map.get(m.coreId) ?? [];
+			list.push({ name: m.name });
+			map.set(m.coreId, list);
 		}
-		return null;
-	}, [chooseState, membersQuery.data]);
+		return map;
+	}, [membersQuery.data]);
+
+	// Smart default core assignment when members data arrives (runs once per scan)
+	useEffect(() => {
+		if (state.step !== "choose") return;
+		if (hasAppliedDefaultsRef.current) return;
+		if (membersByCore.size === 0) return;
+
+		hasAppliedDefaultsRef.current = true;
+
+		setState((prev) => {
+			if (prev.step !== "choose") return prev;
+
+			const updatedConfigs = prev.raids.map((raid, i) => {
+				const existing = prev.raidConfigs[i];
+				if (!existing)
+					return {
+						isSelected: true,
+						coreId: activeCoreId ?? cores[0]?.id ?? "",
+					};
+
+				let bestCoreId = existing.coreId;
+				let bestOverlap = -1;
+
+				for (const core of cores) {
+					const coreMembers = membersByCore.get(core.id) ?? [];
+					if (coreMembers.length === 0) continue;
+					const overlap = computeOverlap(raid.playerNames, coreMembers);
+					if (overlap > bestOverlap) {
+						bestOverlap = overlap;
+						bestCoreId = core.id;
+					}
+				}
+
+				return { ...existing, coreId: bestCoreId };
+			});
+
+			return { ...prev, raidConfigs: updatedConfigs };
+		});
+	}, [state.step, membersByCore, cores, activeCoreId]);
 
 	// Cleanup worker on unmount
 	useEffect(() => {
@@ -116,6 +192,7 @@ export function UploadLogForm({
 			workerRef.current = null;
 
 			fileRef.current = file;
+			hasAppliedDefaultsRef.current = false;
 			setState({ step: "scanning", progress: 0 });
 
 			const worker = new Worker(
@@ -152,8 +229,10 @@ export function UploadLogForm({
 						setState({
 							step: "choose",
 							raids: msg.raids,
-							selectedCoreId: defaultCoreId,
-							selectedRaidIndices: new Set(msg.raids.map((_, i) => i)),
+							raidConfigs: msg.raids.map(() => ({
+								isSelected: true,
+								coreId: defaultCoreId,
+							})),
 						});
 						break;
 					}
@@ -186,10 +265,8 @@ export function UploadLogForm({
 		const file = fileRef.current;
 		if (!file) return;
 
-		const selectedRaids = state.raids.filter((_, i) =>
-			state.selectedRaidIndices.has(i),
-		);
-		if (selectedRaids.length === 0) return;
+		const hasSelected = state.raidConfigs.some((c) => c.isSelected);
+		if (!hasSelected) return;
 
 		setState({
 			step: "uploading",
@@ -241,13 +318,18 @@ export function UploadLogForm({
 			setState({ step: "select" });
 		};
 
+		const selectedPayload = state.raids
+			.map((raid, i) => ({ raid, config: state.raidConfigs[i] }))
+			.filter(({ config }) => config?.isSelected)
+			.map(({ raid, config }) => ({
+				dates: raid.dates,
+				coreId: config.coreId,
+				raidName: formatRaidLabel(raid),
+			}));
+
 		xhr.open("POST", "/api/upload");
 		xhr.setRequestHeader("Content-Type", "application/octet-stream");
-		xhr.setRequestHeader("X-Core-Id", state.selectedCoreId);
-		xhr.setRequestHeader(
-			"X-Selected-Raids",
-			JSON.stringify(selectedRaids.map((r) => r.dates)),
-		);
+		xhr.setRequestHeader("X-Selected-Raids", JSON.stringify(selectedPayload));
 		xhr.send(file);
 	}, [state]);
 
@@ -300,107 +382,110 @@ export function UploadLogForm({
 
 	// Step: choose
 	if (state.step === "choose") {
-		const { raids, selectedCoreId: coreId, selectedRaidIndices } = state;
-		const isAllSelected = selectedRaidIndices.size === raids.length;
-		const isNoneSelected = selectedRaidIndices.size === 0;
-		const isIndeterminate = !isAllSelected && !isNoneSelected;
-
-		const handleCoreChange = (value: string | null) => {
-			if (value) {
-				setState((prev) =>
-					prev.step === "choose" ? { ...prev, selectedCoreId: value } : prev,
-				);
-			}
-		};
-
-		const handleToggleAll = (checked: boolean) => {
-			setState((prev) => {
-				if (prev.step !== "choose") return prev;
-				return {
-					...prev,
-					selectedRaidIndices: checked
-						? new Set(prev.raids.map((_, i) => i))
-						: new Set<number>(),
-				};
-			});
-		};
+		const { raids, raidConfigs } = state;
 
 		const handleToggleRaid = (index: number) => {
 			setState((prev) => {
 				if (prev.step !== "choose") return prev;
-				const next = new Set(prev.selectedRaidIndices);
-				if (next.has(index)) {
-					next.delete(index);
-				} else {
-					next.add(index);
-				}
-				return { ...prev, selectedRaidIndices: next };
+				const next = prev.raidConfigs.map((c, i) =>
+					i === index ? { ...c, isSelected: !c.isSelected } : c,
+				);
+				return { ...prev, raidConfigs: next };
 			});
 		};
 
-		const isImportDisabled = !coreId || isNoneSelected;
+		const handleCoreChange = (index: number, value: string | null) => {
+			if (!value) return;
+			setState((prev) => {
+				if (prev.step !== "choose") return prev;
+				const next = prev.raidConfigs.map((c, i) =>
+					i === index ? { ...c, coreId: value } : c,
+				);
+				return { ...prev, raidConfigs: next };
+			});
+		};
+
+		const isImportDisabled = raidConfigs.every((c) => !c.isSelected);
 
 		return (
 			<div className="flex flex-col gap-4">
-				{/* Core selector */}
-				<div className="flex flex-col gap-1.5">
-					<span className="font-body text-xs font-semibold uppercase tracking-wide text-secondary">
-						Core
-					</span>
-					<SelectRoot value={coreId} onValueChangeAction={handleCoreChange}>
-						<SelectTrigger placeholder="Select a core" className="w-full" />
-						<SelectPopup>
-							{cores.map((core) => (
-								<SelectItem key={core.id} value={core.id}>
-									{core.name}
-								</SelectItem>
-							))}
-						</SelectPopup>
-					</SelectRoot>
-				</div>
-
-				{/* Mismatch warning */}
-				{mismatchWarning && (
-					<Alert message={mismatchWarning} variant="warning" />
-				)}
-
 				{/* Raid list */}
-				<div className="flex flex-col gap-2">
-					<div className="flex items-center gap-2.5">
-						<CheckboxRoot
-							checked={isAllSelected}
-							indeterminate={isIndeterminate}
-							onCheckedChangeAction={handleToggleAll}
-						/>
-						<span className="font-body text-xs font-semibold text-primary">
-							Select all ({raids.length})
-						</span>
-					</div>
+				<div className="flex flex-col gap-1">
+					{raids.map((raid, index) => {
+						const config = raidConfigs[index];
+						if (!config) return null;
 
-					<div className="flex flex-col gap-1">
-						{raids.map((raid, index) => {
-							const isSelected = selectedRaidIndices.has(index);
-							return (
-								<div
-									key={raid.dates.join("-")}
-									className="flex items-center gap-2.5 border border-border px-3 py-2 transition-colors hover:border-border-light"
-								>
-									<CheckboxRoot
-										checked={isSelected}
-										onCheckedChangeAction={() => handleToggleRaid(index)}
-									/>
-									<div className="flex min-w-0 flex-1 flex-col gap-0.5">
-										<span className="font-body text-xs font-semibold text-primary">
-											{formatRaidLabel(raid)}
-										</span>
+						const coreMembers = membersByCore.get(config.coreId) ?? [];
+						const overlap = computeOverlap(raid.playerNames, coreMembers);
+						const isMismatch = overlap < 0.3;
+
+						return (
+							<div
+								key={raid.dates.join("-")}
+								className="flex items-start gap-2.5 border border-border px-3 py-2.5"
+							>
+								<CheckboxRoot
+									checked={config.isSelected}
+									onCheckedChangeAction={() => handleToggleRaid(index)}
+									className="mt-0.5"
+								/>
+								<div className="flex min-w-0 flex-1 flex-col gap-1">
+									<span className="font-body text-xs font-semibold text-primary">
+										{formatRaidLabel(raid)}
+									</span>
+									<span className="font-body text-2xs text-dimmed">
+										{formatTimeRange(raid)}
+									</span>
+									<div className="flex flex-wrap items-center gap-1">
 										<span className="font-body text-2xs text-dimmed">
-											{raid.playerCount} members
+											{raid.playerNames.slice(0, 3).join(", ")}
 										</span>
+										{raid.playerCount > 3 && (
+											<TooltipRoot>
+												<TooltipTrigger render={<span />}>
+													<span className="cursor-default font-body text-2xs text-accent">
+														+{raid.playerCount - 3} more
+													</span>
+												</TooltipTrigger>
+												<TooltipContent side="bottom">
+													<div className="max-h-48 overflow-y-auto">
+														{raid.playerNames.map((name) => (
+															<span
+																key={name}
+																className="block font-body text-2xs text-primary"
+															>
+																{name}
+															</span>
+														))}
+													</div>
+												</TooltipContent>
+											</TooltipRoot>
+										)}
 									</div>
 								</div>
-							);
-						})}
-					</div>
+								<div className="flex shrink-0 items-center gap-1.5">
+									<SelectRoot
+										value={config.coreId}
+										onValueChangeAction={(value) =>
+											handleCoreChange(index, value)
+										}
+									>
+										<SelectTrigger placeholder="Core" className="w-36" />
+										<SelectPopup>
+											{cores.map((c) => (
+												<SelectItem key={c.id} value={c.id}>
+													{c.name}
+												</SelectItem>
+											))}
+										</SelectPopup>
+									</SelectRoot>
+									{isMismatch && (
+										<AlertTriangle className="size-3 text-warning" />
+									)}
+								</div>
+							</div>
+						);
+					})}
 				</div>
 
 				{/* Import button */}
