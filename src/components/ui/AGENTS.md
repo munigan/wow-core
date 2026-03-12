@@ -46,6 +46,22 @@ All tooltips use collision avoidance (`side: "flip"`, `align: "shift"`, `collisi
 | `tabs` | compound: `Tabs`, `TabList`, `Tab`, `TabPanel` | base-ui + tailwind-merge |
 | `progress-bar` | single export | base-ui + tailwind-merge |
 | `tooltip` | compound: `TooltipProvider`, `TooltipRoot`, `TooltipTrigger`, `TooltipContent`, `TooltipLabel`, `TooltipValue` | base-ui + tailwind-merge |
+| `popover` | compound: `PopoverRoot`, `PopoverTrigger`, `PopoverContent`, `PopoverClose` | base-ui + tailwind-merge |
+| `dialog` | compound: `DialogRoot`, `DialogTrigger`, `DialogContent`, `DialogTitle`, `DialogDescription`, `DialogClose` | base-ui + tailwind-merge |
+
+## Popover
+
+`PopoverTrigger` renders a `<button>` by default (via Base UI). When wrapping an element that is already a `<button>`, pass `render={<span />}` to avoid nested `<button>` HTML. Same pattern as `TooltipTrigger`.
+
+`PopoverRoot` accepts `onOpenChangeAction` for controlled mode. Use controlled mode when you need to close the popover programmatically (e.g., after selecting an item).
+
+## Dialog
+
+Visual style mirrors the Tooltip component: `border border-accent bg-sidebar`, centered with semi-transparent backdrop.
+
+`DialogRoot` accepts `onOpenChangeAction` for controlled mode. The dialog is modal by default (focus trapped, scroll locked).
+
+`DialogTrigger` renders a `<button>` by default. Use `render={<span />}` when wrapping existing interactive elements.
 
 ## Alert
 
