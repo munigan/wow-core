@@ -1,7 +1,6 @@
 "use client";
 
 import {
-	Download,
 	LayoutDashboard,
 	Shield,
 	Swords,
@@ -17,7 +16,6 @@ const NAV_ITEMS = [
 	{ href: "/members", label: "Members", icon: Users },
 	{ href: "/gear", label: "Gear & Enchants", icon: Shield },
 	{ href: "/trends", label: "Trends", icon: TrendingUp },
-	{ href: "/exports", label: "Exports", icon: Download },
 ] as const;
 
 export const NavLinks = () => {

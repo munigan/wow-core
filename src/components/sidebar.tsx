@@ -1,5 +1,6 @@
-import { LogOut, Sword, Upload, User } from "lucide-react";
+import { Sword, Upload, User } from "lucide-react";
 import { NavLinks } from "@/components/nav-links";
+import { SignOutButton } from "@/components/sign-out-button";
 import { Button } from "@/components/ui/button";
 import {
 	SelectItem,
@@ -38,7 +39,7 @@ export const Sidebar = ({ user }: SidebarProps) => {
 			<div className="flex flex-col gap-3 border-t border-border px-5 py-4">
 				{/* Core selector (placeholder) */}
 				<div className="flex flex-col gap-1">
-					<span className="font-body text-2xs font-bold uppercase tracking-wide text-muted">
+					<span className="font-body text-2xs font-bold uppercase tracking-wide text-dimmed">
 						{"// Active Core"}
 					</span>
 					<SelectRoot defaultValue="frostmourne">
@@ -55,14 +56,6 @@ export const Sidebar = ({ user }: SidebarProps) => {
 					Upload Log
 				</Button>
 
-				{/* System info (placeholder) */}
-				<div className="flex flex-col gap-1.5">
-					<span className="font-body text-2xs text-muted">
-						{"v2.4.1 // uwu-logs"}
-					</span>
-					<span className="font-body text-2xs text-muted">LAST SYNC: —</span>
-				</div>
-
 				{/* User profile */}
 				<div className="flex items-center gap-2.5 border-t border-border pt-3">
 					<div className="flex size-7 items-center justify-center rounded-full bg-accent-20">
@@ -72,17 +65,11 @@ export const Sidebar = ({ user }: SidebarProps) => {
 						<span className="truncate font-body text-xs font-semibold text-primary">
 							{user.name}
 						</span>
-						<span className="truncate font-body text-2xs text-muted">
+						<span className="truncate font-body text-2xs font-medium text-dimmed">
 							{user.email}
 						</span>
 					</div>
-					<button
-						type="button"
-						className="text-muted transition-colors hover:text-primary"
-						aria-label="Sign out"
-					>
-						<LogOut className="size-3.5" />
-					</button>
+					<SignOutButton />
 				</div>
 			</div>
 		</aside>

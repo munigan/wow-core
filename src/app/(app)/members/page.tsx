@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+	title: "Members",
+};
+
 export default function MembersPage() {
 	return (
 		<div className="flex flex-col gap-8 p-8">

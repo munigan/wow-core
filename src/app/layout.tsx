@@ -14,8 +14,11 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-	title: "WoW Raid Tools",
-	description: "",
+	title: {
+		default: "WoW Raid Tools",
+		template: "%s | WoW Raid Tools",
+	},
+	description: "Raid core analyzer for World of Warcraft",
 };
 
 export default function RootLayout({

@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+	title: "Trends",
+};
+
 export default function TrendsPage() {
 	return (
 		<div className="flex flex-col gap-8 p-8">
