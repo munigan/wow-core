@@ -25,7 +25,7 @@ export const DialogRoot = ({
 export type DialogTriggerProps = {
 	className?: string;
 	render?: React.ReactElement;
-	children: React.ReactNode;
+	children?: React.ReactNode;
 };
 
 export const DialogTrigger = ({
