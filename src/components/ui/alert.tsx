@@ -1,5 +1,5 @@
-import { type VariantProps, tv } from "tailwind-variants";
 import { AlertTriangle, CheckCircle, Info } from "lucide-react";
+import { tv, type VariantProps } from "tailwind-variants";
 
 const alertVariants = tv({
 	base: "flex items-center gap-2 px-3.5 py-2.5 font-body text-sm font-medium",
@@ -35,7 +35,11 @@ export const Alert = ({
 	const Icon = iconMap[variant!];
 
 	return (
-		<div role="alert" className={alertVariants({ variant, className })} {...props}>
+		<div
+			role="alert"
+			className={alertVariants({ variant, className })}
+			{...props}
+		>
 			<Icon className="h-3.5 w-3.5 shrink-0" />
 			<span>{message}</span>
 		</div>

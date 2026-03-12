@@ -84,9 +84,7 @@ export function SignInForm() {
 			</div>
 
 			{/* Error Alert */}
-			{hasErrors && (
-				<Alert message={firstError} />
-			)}
+			{hasErrors && <Alert message={firstError} />}
 
 			{/* Form Fields */}
 			<div className="flex flex-col gap-4">
