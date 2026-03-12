@@ -9,6 +9,8 @@ import { parseLogStream, parseLogStreamMulti } from "@/lib/log-parser";
 
 type SelectedRaidPayload = {
 	dates: string[];
+	startTime: string;
+	endTime: string;
 	coreId: string;
 	raidName: string;
 };
@@ -34,8 +36,12 @@ export async function POST(request: Request) {
 			const selectedRaids: SelectedRaidPayload[] =
 				JSON.parse(selectedRaidsHeader);
 
-			const selectedDateGroups = selectedRaids.map((r) => r.dates);
-			const multiResult = await parseLogStreamMulti(body, selectedDateGroups);
+			const raidTimeRanges = selectedRaids.map((r) => ({
+				dates: r.dates,
+				startTime: r.startTime,
+				endTime: r.endTime,
+			}));
+			const multiResult = await parseLogStreamMulti(body, raidTimeRanges);
 
 			if (multiResult.raids.length === 0) {
 				return Response.json(

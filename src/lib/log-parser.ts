@@ -76,23 +76,36 @@ export async function parseLogStream(
 	};
 }
 
-function extractDateKey(line: string): string | null {
-	const match = line.match(/^(\d{1,2})\/(\d{1,2})\s/);
-	if (!match) return null;
-	return `${Number.parseInt(match[1], 10)}/${Number.parseInt(match[2], 10)}`;
-}
-
-type DateBucket = {
-	players: Map<string, string>;
-	firstLine: Date;
-	raidDate: Date;
+export type RaidTimeRange = {
+	dates: string[];
+	startTime: string;
+	endTime: string;
 };
 
 export async function parseLogStreamMulti(
 	stream: ReadableStream<Uint8Array>,
-	selectedDateGroups: string[][],
+	raidTimeRanges: RaidTimeRange[],
 ): Promise<ParseResultMulti> {
-	const dateBuckets = new Map<string, DateBucket>();
+	// Build a set of all relevant dates for fast line filtering
+	const relevantDates = new Set<string>();
+	for (const range of raidTimeRanges) {
+		for (const d of range.dates) {
+			relevantDates.add(d);
+		}
+	}
+
+	// Per-raid player buckets with time-range filtering
+	const raidBuckets: {
+		players: Map<string, string>;
+		raidDate: Date | null;
+		startMs: number;
+		endMs: number;
+	}[] = raidTimeRanges.map((range) => ({
+		players: new Map(),
+		raidDate: null,
+		startMs: new Date(range.startTime).getTime(),
+		endMs: new Date(range.endTime).getTime(),
+	}));
 
 	const textStream = stream.pipeThrough(
 		new TextDecoderStream() as ReadableWritablePair<string, Uint8Array>,
@@ -110,44 +123,31 @@ export async function parseLogStreamMulti(
 		buffer = lines.pop() ?? "";
 
 		for (const line of lines) {
-			processMultiLine(line, dateBuckets);
+			processMultiLineWithTimeRange(line, relevantDates, raidBuckets);
 		}
 	}
 
 	if (buffer.trim()) {
-		processMultiLine(buffer, dateBuckets);
+		processMultiLineWithTimeRange(buffer, relevantDates, raidBuckets);
 	}
 
 	const raids: ParseResultMulti["raids"] = [];
 
-	for (const dateGroup of selectedDateGroups) {
-		const combinedPlayers = new Map<string, string>();
-		let raidDate: Date | null = null;
+	for (let i = 0; i < raidTimeRanges.length; i++) {
+		const range = raidTimeRanges[i];
+		const bucket = raidBuckets[i];
 
-		for (const dateKey of dateGroup) {
-			const bucket = dateBuckets.get(dateKey);
-			if (!bucket) continue;
-
-			for (const [guid, name] of bucket.players) {
-				combinedPlayers.set(guid, name);
-			}
-
-			if (raidDate === null) {
-				raidDate = bucket.raidDate;
-			}
-		}
-
-		const firstDate = dateGroup[0];
-		const lastDate = dateGroup[dateGroup.length - 1];
+		const firstDate = range.dates[0];
+		const lastDate = range.dates[range.dates.length - 1];
 		const raidName =
-			dateGroup.length === 1
+			range.dates.length === 1
 				? `Raid ${firstDate}`
 				: `Raid ${firstDate} - ${lastDate}`;
 
 		raids.push({
-			raidDate: raidDate ?? new Date(),
+			raidDate: bucket.raidDate ?? new Date(),
 			raidName,
-			players: Array.from(combinedPlayers.entries()).map(([guid, name]) => ({
+			players: Array.from(bucket.players.entries()).map(([guid, name]) => ({
 				guid,
 				name,
 			})),
@@ -157,27 +157,28 @@ export async function parseLogStreamMulti(
 	return { raids };
 }
 
-function processMultiLine(
+function processMultiLineWithTimeRange(
 	line: string,
-	dateBuckets: Map<string, DateBucket>,
+	relevantDates: Set<string>,
+	raidBuckets: {
+		players: Map<string, string>;
+		raidDate: Date | null;
+		startMs: number;
+		endMs: number;
+	}[],
 ): void {
-	const dateKey = extractDateKey(line);
-	if (!dateKey) return;
+	const spaceIdx = line.indexOf(" ");
+	if (spaceIdx === -1) return;
 
-	let bucket = dateBuckets.get(dateKey);
-	if (!bucket) {
-		const parsedDate = extractDate(line);
-		if (!parsedDate) return;
-		bucket = {
-			players: new Map(),
-			firstLine: parsedDate,
-			raidDate: parsedDate,
-		};
-		dateBuckets.set(dateKey, bucket);
-	}
+	const dateStr = line.slice(0, spaceIdx);
+	if (!relevantDates.has(dateStr)) return;
 
 	const doubleSpaceIdx = line.indexOf("  ");
 	if (doubleSpaceIdx === -1) return;
+
+	const timestamp = extractDate(line);
+	if (!timestamp) return;
+	const timestampMs = timestamp.getTime();
 
 	const eventPart = line.slice(doubleSpaceIdx + 2);
 	const fields = parseFields(eventPart);
@@ -188,11 +189,20 @@ function processMultiLine(
 	const destGuid = fields[4];
 	const destName = stripQuotes(fields[5]);
 
-	if (sourceGuid?.startsWith("0x0E") && sourceName) {
-		bucket.players.set(sourceGuid, sourceName);
-	}
-	if (destGuid?.startsWith("0x0E") && destName && destName !== "nil") {
-		bucket.players.set(destGuid, destName);
+	// Assign this line's players to all matching raid buckets by time range
+	for (const bucket of raidBuckets) {
+		if (timestampMs < bucket.startMs || timestampMs > bucket.endMs) continue;
+
+		if (bucket.raidDate === null) {
+			bucket.raidDate = timestamp;
+		}
+
+		if (sourceGuid?.startsWith("0x0E") && sourceName) {
+			bucket.players.set(sourceGuid, sourceName);
+		}
+		if (destGuid?.startsWith("0x0E") && destName && destName !== "nil") {
+			bucket.players.set(destGuid, destName);
+		}
 	}
 }
 

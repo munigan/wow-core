@@ -323,6 +323,8 @@ export function UploadLogForm({
 			.filter(({ config }) => config?.isSelected)
 			.map(({ raid, config }) => ({
 				dates: raid.dates,
+				startTime: raid.startTime,
+				endTime: raid.endTime,
 				coreId: config.coreId,
 				raidName: formatRaidLabel(raid),
 			}));

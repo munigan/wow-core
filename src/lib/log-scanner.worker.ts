@@ -1,28 +1,33 @@
 import {
-	type DateGroup,
 	detectRaids,
+	mergeSegmentsByRoster,
 	parseDateTimestamp,
 	type ScanDone,
 	type ScanError,
 	type ScanProgress,
+	type Segment,
 } from "./log-scanner";
 
 const PROGRESS_INTERVAL_BYTES = 5 * 1024 * 1024; // ~5MB
+const GAP_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+
+type WorkerSegment = {
+	date: string;
+	segmentIndex: number;
+	firstTimestamp: Date;
+	lastTimestamp: Date;
+	players: Map<string, string>;
+	npcs: Map<string, string>;
+};
 
 self.onmessage = async (e: MessageEvent<{ file: File }>) => {
 	try {
 		const { file } = e.data;
 		const totalBytes = file.size;
 
-		const dateMap = new Map<
-			string,
-			{
-				firstTimestamp: Date;
-				lastTimestamp: Date;
-				players: Map<string, string>;
-				npcs: Map<string, string>;
-			}
-		>();
+		// Track segments per date. When a time gap >30 min is detected,
+		// a new segment is created within the same date.
+		const segmentsByDate = new Map<string, WorkerSegment[]>();
 
 		const textStream = file
 			.stream()
@@ -47,7 +52,7 @@ self.onmessage = async (e: MessageEvent<{ file: File }>) => {
 			buffer = lines.pop() ?? "";
 
 			for (const line of lines) {
-				processLine(line, dateMap);
+				processLine(line, segmentsByDate);
 			}
 
 			if (bytesRead - lastProgressAt >= PROGRESS_INTERVAL_BYTES) {
@@ -62,19 +67,7 @@ self.onmessage = async (e: MessageEvent<{ file: File }>) => {
 
 		// Process remaining buffer
 		if (buffer.trim()) {
-			processLine(buffer, dateMap);
-		}
-
-		// Convert map to DateGroup array
-		const dateGroups: DateGroup[] = [];
-		for (const [date, group] of dateMap) {
-			dateGroups.push({
-				date,
-				firstTimestamp: group.firstTimestamp.toISOString(),
-				lastTimestamp: group.lastTimestamp.toISOString(),
-				players: group.players,
-				npcs: group.npcs,
-			});
+			processLine(buffer, segmentsByDate);
 		}
 
 		// Send final progress so UI reaches 100% before switching to done
@@ -84,7 +77,23 @@ self.onmessage = async (e: MessageEvent<{ file: File }>) => {
 			totalBytes,
 		} satisfies ScanProgress);
 
-		const raids = detectRaids(dateGroups);
+		// Convert worker segments to Segment type and merge by roster
+		let allSegments: Segment[] = [];
+		for (const dateSegments of segmentsByDate.values()) {
+			const converted: Segment[] = dateSegments.map((ws) => ({
+				date: ws.date,
+				segmentIndex: ws.segmentIndex,
+				firstTimestamp: ws.firstTimestamp.toISOString(),
+				lastTimestamp: ws.lastTimestamp.toISOString(),
+				players: ws.players,
+				npcs: ws.npcs,
+			}));
+			// Merge segments from the same date that have similar rosters
+			const merged = mergeSegmentsByRoster(converted);
+			allSegments = allSegments.concat(merged);
+		}
+
+		const raids = detectRaids(allSegments);
 
 		self.postMessage({ type: "done", raids } satisfies ScanDone);
 	} catch (err) {
@@ -97,15 +106,7 @@ self.onmessage = async (e: MessageEvent<{ file: File }>) => {
 
 function processLine(
 	line: string,
-	dateMap: Map<
-		string,
-		{
-			firstTimestamp: Date;
-			lastTimestamp: Date;
-			players: Map<string, string>;
-			npcs: Map<string, string>;
-		}
-	>,
+	segmentsByDate: Map<string, WorkerSegment[]>,
 ): void {
 	// Line format: "M/D HH:MM:SS.mmm  EVENT_TYPE,..."
 	const spaceIdx = line.indexOf(" ");
@@ -122,27 +123,50 @@ function processLine(
 
 	const timestamp = parseDateTimestamp(dateStr, timeStr);
 
-	// Update date group
-	let group = dateMap.get(dateStr);
-	if (!group) {
-		group = {
+	// Get or create segments for this date
+	let dateSegments = segmentsByDate.get(dateStr);
+	if (!dateSegments) {
+		dateSegments = [];
+		segmentsByDate.set(dateStr, dateSegments);
+	}
+
+	// Get the current (last) segment for this date, or create the first one
+	let currentSegment = dateSegments[dateSegments.length - 1];
+
+	if (!currentSegment) {
+		// First event on this date
+		currentSegment = {
+			date: dateStr,
+			segmentIndex: 0,
 			firstTimestamp: timestamp,
 			lastTimestamp: timestamp,
 			players: new Map(),
 			npcs: new Map(),
 		};
-		dateMap.set(dateStr, group);
+		dateSegments.push(currentSegment);
 	} else {
-		if (timestamp.getTime() < group.firstTimestamp.getTime()) {
-			group.firstTimestamp = timestamp;
-		}
-		if (timestamp.getTime() > group.lastTimestamp.getTime()) {
-			group.lastTimestamp = timestamp;
+		// Check for time gap
+		const gap = timestamp.getTime() - currentSegment.lastTimestamp.getTime();
+		if (gap > GAP_THRESHOLD_MS) {
+			// Start a new segment
+			currentSegment = {
+				date: dateStr,
+				segmentIndex: dateSegments.length,
+				firstTimestamp: timestamp,
+				lastTimestamp: timestamp,
+				players: new Map(),
+				npcs: new Map(),
+			};
+			dateSegments.push(currentSegment);
+		} else {
+			// Update last timestamp
+			if (timestamp.getTime() > currentSegment.lastTimestamp.getTime()) {
+				currentSegment.lastTimestamp = timestamp;
+			}
 		}
 	}
 
-	// Extract player GUIDs from event fields
-	// Minimum 7 fields: EVENT_TYPE, sourceGUID, sourceName, sourceFlags, destGUID, destName, destFlags
+	// Extract player and NPC GUIDs from event fields
 	const eventPart = line.slice(doubleSpaceIdx + 2);
 	const fields = parseFields(eventPart);
 	if (fields.length < 7) return;
@@ -153,21 +177,21 @@ function processLine(
 	const destName = stripQuotes(fields[5]);
 
 	if (sourceGuid?.startsWith("0x0E") && sourceName) {
-		group.players.set(sourceGuid, sourceName);
+		currentSegment.players.set(sourceGuid, sourceName);
 	}
 	if (destGuid?.startsWith("0x0E") && destName && destName !== "nil") {
-		group.players.set(destGuid, destName);
+		currentSegment.players.set(destGuid, destName);
 	}
 
 	// Collect NPC GUIDs (creatures and game objects)
 	if (sourceGuid?.startsWith("0xF130") || sourceGuid?.startsWith("0xF150")) {
 		if (sourceName && sourceName !== "nil") {
-			group.npcs.set(sourceGuid, sourceName);
+			currentSegment.npcs.set(sourceGuid, sourceName);
 		}
 	}
 	if (destGuid?.startsWith("0xF130") || destGuid?.startsWith("0xF150")) {
 		if (destName && destName !== "nil") {
-			group.npcs.set(destGuid, destName);
+			currentSegment.npcs.set(destGuid, destName);
 		}
 	}
 }

@@ -38,6 +38,15 @@ export type DateGroup = {
 	npcs: Map<string, string>;
 };
 
+export type Segment = {
+	date: string;
+	segmentIndex: number;
+	firstTimestamp: string;
+	lastTimestamp: string;
+	players: Map<string, string>;
+	npcs: Map<string, string>;
+};
+
 const JACCARD_THRESHOLD = 0.5;
 
 /**
@@ -96,25 +105,63 @@ export function jaccardSimilarity(
 }
 
 /**
- * Detect raids from an array of DateGroups by grouping consecutive dates
+ * Merge adjacent segments from the same date when their player rosters
+ * have high Jaccard similarity (same raid with a break).
+ */
+export function mergeSegmentsByRoster(segments: Segment[]): Segment[] {
+	if (segments.length <= 1) return segments;
+
+	const merged: Segment[] = [segments[0]];
+
+	for (let i = 1; i < segments.length; i++) {
+		const last = merged[merged.length - 1];
+		const curr = segments[i];
+
+		if (
+			last.date === curr.date &&
+			jaccardSimilarity(last.players, curr.players) >= JACCARD_THRESHOLD
+		) {
+			// Merge: union players/npcs, extend time range
+			for (const [guid, name] of curr.players) {
+				last.players.set(guid, name);
+			}
+			for (const [guid, name] of curr.npcs) {
+				last.npcs.set(guid, name);
+			}
+			const currEnd = new Date(curr.lastTimestamp);
+			if (currEnd.getTime() > new Date(last.lastTimestamp).getTime()) {
+				last.lastTimestamp = curr.lastTimestamp;
+			}
+		} else {
+			merged.push(curr);
+		}
+	}
+
+	return merged;
+}
+
+/**
+ * Detect raids from an array of Segments by grouping consecutive segments
  * with similar player rosters (Jaccard similarity > threshold).
  *
- * Sorts dateGroups chronologically before processing.
+ * Sorts segments chronologically before processing.
  */
-export function detectRaids(dateGroups: DateGroup[]): DetectedRaid[] {
-	if (dateGroups.length === 0) return [];
+export function detectRaids(segments: Segment[]): DetectedRaid[] {
+	if (segments.length === 0) return [];
 
-	const sorted = [...dateGroups].sort(
-		(a, b) => parseDateKey(a.date).getTime() - parseDateKey(b.date).getTime(),
+	const sorted = [...segments].sort(
+		(a, b) =>
+			new Date(a.firstTimestamp).getTime() -
+			new Date(b.firstTimestamp).getTime(),
 	);
 
-	const raidGroups: DateGroup[][] = [[sorted[0]]];
+	const raidGroups: Segment[][] = [[sorted[0]]];
 
 	for (let i = 1; i < sorted.length; i++) {
 		const currentGroup = raidGroups[raidGroups.length - 1];
-		const lastDateGroup = currentGroup[currentGroup.length - 1];
+		const lastSegment = currentGroup[currentGroup.length - 1];
 		const similarity = jaccardSimilarity(
-			lastDateGroup.players,
+			lastSegment.players,
 			sorted[i].players,
 		);
 
@@ -128,26 +175,26 @@ export function detectRaids(dateGroups: DateGroup[]): DetectedRaid[] {
 	return raidGroups.map(buildDetectedRaid);
 }
 
-function buildDetectedRaid(group: DateGroup[]): DetectedRaid {
-	const dates: string[] = [];
+function buildDetectedRaid(group: Segment[]): DetectedRaid {
+	const dateSet = new Set<string>();
 	let startTime = new Date(group[0].firstTimestamp);
 	let endTime = new Date(group[0].lastTimestamp);
 	const allPlayers = new Map<string, string>();
 
-	for (const dg of group) {
-		dates.push(dg.date);
+	for (const seg of group) {
+		dateSet.add(seg.date);
 
-		const dgStart = new Date(dg.firstTimestamp);
-		const dgEnd = new Date(dg.lastTimestamp);
+		const segStart = new Date(seg.firstTimestamp);
+		const segEnd = new Date(seg.lastTimestamp);
 
-		if (dgStart.getTime() < startTime.getTime()) {
-			startTime = dgStart;
+		if (segStart.getTime() < startTime.getTime()) {
+			startTime = segStart;
 		}
-		if (dgEnd.getTime() > endTime.getTime()) {
-			endTime = dgEnd;
+		if (segEnd.getTime() > endTime.getTime()) {
+			endTime = segEnd;
 		}
 
-		for (const [guid, name] of dg.players) {
+		for (const [guid, name] of seg.players) {
 			allPlayers.set(guid, name);
 		}
 	}
@@ -155,8 +202,8 @@ function buildDetectedRaid(group: DateGroup[]): DetectedRaid {
 	const uniqueNames = [...new Set(allPlayers.values())];
 
 	const allNpcs = new Map<string, string>();
-	for (const dg of group) {
-		for (const [guid, name] of dg.npcs) {
+	for (const seg of group) {
+		for (const [guid, name] of seg.npcs) {
 			allNpcs.set(guid, name);
 		}
 	}
@@ -164,7 +211,7 @@ function buildDetectedRaid(group: DateGroup[]): DetectedRaid {
 	const raidInstance = identifyRaidInstance(uniqueNpcNames);
 
 	return {
-		dates,
+		dates: [...dateSet],
 		startTime: startTime.toISOString(),
 		endTime: endTime.toISOString(),
 		playerCount: uniqueNames.length,
