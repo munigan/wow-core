@@ -49,7 +49,7 @@ export const Sidebar = ({ user, cores, activeCoreId }: SidebarProps) => {
 				</div>
 
 				{/* Upload log */}
-				<UploadLogDialog />
+				<UploadLogDialog cores={cores} activeCoreId={activeCoreId} />
 
 				{/* User profile */}
 				<div className="flex items-center gap-2.5 border-t border-border pt-3">
