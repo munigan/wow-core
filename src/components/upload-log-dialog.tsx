@@ -30,7 +30,7 @@ export function UploadLogDialog({ cores, activeCoreId }: UploadLogDialogProps) {
 					</Button>
 				}
 			/>
-			<DialogContent>
+			<DialogContent className="w-(--width-dialog-wide)">
 				<DialogTitle>Upload Log</DialogTitle>
 				<DialogDescription>
 					Upload a WoW combat log file to extract raid data and members.

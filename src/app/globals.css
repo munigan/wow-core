@@ -73,6 +73,9 @@
 
 	/* Tracking */
 	--tracking-wide: 0.5px;
+
+	/* Layout */
+	--width-dialog-wide: 38rem;
 }
 
 body {
