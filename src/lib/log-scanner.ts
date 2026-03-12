@@ -45,6 +45,7 @@ export type Segment = {
 	lastTimestamp: string;
 	players: Map<string, string>;
 	npcs: Map<string, string>;
+	raidInstance: string | null;
 };
 
 const JACCARD_THRESHOLD = 0.5;
@@ -117,8 +118,13 @@ export function mergeSegmentsByRoster(segments: Segment[]): Segment[] {
 		const last = merged[merged.length - 1];
 		const curr = segments[i];
 
+		const crossInstance =
+			last.raidInstance !== null &&
+			curr.raidInstance !== null &&
+			last.raidInstance !== curr.raidInstance;
 		if (
 			last.date === curr.date &&
+			!crossInstance &&
 			jaccardSimilarity(last.players, curr.players) >= JACCARD_THRESHOLD
 		) {
 			// Merge: union players/npcs, extend time range
@@ -127,6 +133,9 @@ export function mergeSegmentsByRoster(segments: Segment[]): Segment[] {
 			}
 			for (const [guid, name] of curr.npcs) {
 				last.npcs.set(guid, name);
+			}
+			if (!last.raidInstance && curr.raidInstance) {
+				last.raidInstance = curr.raidInstance;
 			}
 			const currEnd = new Date(curr.lastTimestamp);
 			if (currEnd.getTime() > new Date(last.lastTimestamp).getTime()) {
@@ -165,7 +174,12 @@ export function detectRaids(segments: Segment[]): DetectedRaid[] {
 			sorted[i].players,
 		);
 
-		if (similarity > JACCARD_THRESHOLD) {
+		const crossInstance =
+			lastSegment.raidInstance !== null &&
+			sorted[i].raidInstance !== null &&
+			lastSegment.raidInstance !== sorted[i].raidInstance;
+
+		if (!crossInstance && similarity > JACCARD_THRESHOLD) {
 			currentGroup.push(sorted[i]);
 		} else {
 			raidGroups.push([sorted[i]]);

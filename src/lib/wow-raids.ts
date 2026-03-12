@@ -1,4 +1,4 @@
-const BOSS_TO_RAID: ReadonlyMap<string, string> = new Map([
+export const BOSS_TO_RAID: ReadonlyMap<string, string> = new Map([
 	// Naxxramas
 	["Anub'Rekhan", "Naxxramas"],
 	["Grand Widow Faerlina", "Naxxramas"],

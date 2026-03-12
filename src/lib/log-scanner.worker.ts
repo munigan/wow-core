@@ -7,6 +7,7 @@ import {
 	type ScanProgress,
 	type Segment,
 } from "./log-scanner";
+import { BOSS_TO_RAID } from "./wow-raids";
 
 const PROGRESS_INTERVAL_BYTES = 5 * 1024 * 1024; // ~5MB
 const GAP_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
@@ -18,6 +19,7 @@ type WorkerSegment = {
 	lastTimestamp: Date;
 	players: Map<string, string>;
 	npcs: Map<string, string>;
+	raidInstance: string | null;
 };
 
 self.onmessage = async (e: MessageEvent<{ file: File }>) => {
@@ -87,6 +89,7 @@ self.onmessage = async (e: MessageEvent<{ file: File }>) => {
 				lastTimestamp: ws.lastTimestamp.toISOString(),
 				players: ws.players,
 				npcs: ws.npcs,
+				raidInstance: ws.raidInstance,
 			}));
 			// Merge segments from the same date that have similar rosters
 			const merged = mergeSegmentsByRoster(converted);
@@ -142,6 +145,7 @@ function processLine(
 			lastTimestamp: timestamp,
 			players: new Map(),
 			npcs: new Map(),
+			raidInstance: null,
 		};
 		dateSegments.push(currentSegment);
 	} else {
@@ -156,6 +160,7 @@ function processLine(
 				lastTimestamp: timestamp,
 				players: new Map(),
 				npcs: new Map(),
+				raidInstance: null,
 			};
 			dateSegments.push(currentSegment);
 		} else {
@@ -183,16 +188,46 @@ function processLine(
 		currentSegment.players.set(destGuid, destName);
 	}
 
-	// Collect NPC GUIDs (creatures and game objects)
-	if (sourceGuid?.startsWith("0xF130") || sourceGuid?.startsWith("0xF150")) {
-		if (sourceName && sourceName !== "nil") {
-			currentSegment.npcs.set(sourceGuid, sourceName);
+	// Instance-aware splitting: check if source/dest are boss NPCs
+	const isSourceNpc =
+		sourceGuid?.startsWith("0xF130") || sourceGuid?.startsWith("0xF150");
+	const isDestNpc =
+		destGuid?.startsWith("0xF130") || destGuid?.startsWith("0xF150");
+
+	const sourceInstance =
+		isSourceNpc && sourceName && sourceName !== "nil"
+			? BOSS_TO_RAID.get(sourceName)
+			: undefined;
+	const destInstance =
+		isDestNpc && destName && destName !== "nil"
+			? BOSS_TO_RAID.get(destName)
+			: undefined;
+	const bossInstance = sourceInstance ?? destInstance;
+
+	if (bossInstance) {
+		if (currentSegment.raidInstance === null) {
+			currentSegment.raidInstance = bossInstance;
+		} else if (bossInstance !== currentSegment.raidInstance) {
+			// Instance changed — create new segment
+			currentSegment = {
+				date: dateStr,
+				segmentIndex: dateSegments.length,
+				firstTimestamp: timestamp,
+				lastTimestamp: timestamp,
+				players: new Map(currentSegment.players),
+				npcs: new Map(),
+				raidInstance: bossInstance,
+			};
+			dateSegments.push(currentSegment);
 		}
 	}
-	if (destGuid?.startsWith("0xF130") || destGuid?.startsWith("0xF150")) {
-		if (destName && destName !== "nil") {
-			currentSegment.npcs.set(destGuid, destName);
-		}
+
+	// Add NPCs to the (possibly new) current segment
+	if (isSourceNpc && sourceName && sourceName !== "nil") {
+		currentSegment.npcs.set(sourceGuid, sourceName);
+	}
+	if (isDestNpc && destName && destName !== "nil") {
+		currentSegment.npcs.set(destGuid, destName);
 	}
 }
 
