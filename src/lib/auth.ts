@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { organization } from "better-auth/plugins";
 import { db } from "@/lib/db";
 import { schema } from "@/lib/db/schema";
 
@@ -12,6 +13,9 @@ export const auth = betterAuth({
 			session: schema.sessions,
 			account: schema.accounts,
 			verification: schema.verifications,
+			organization: schema.cores,
+			member: schema.coreMembers,
+			invitation: schema.coreInvitations,
 		},
 	}),
 	emailAndPassword: {
@@ -29,6 +33,33 @@ export const auth = betterAuth({
 	session: {
 		modelName: "sessions",
 	},
+	plugins: [
+		organization({
+			schema: {
+				organization: {
+					modelName: "cores",
+					additionalFields: {
+						realm: {
+							type: "string",
+							required: true,
+							input: true,
+						},
+						raidSize: {
+							type: "string",
+							required: true,
+							input: true,
+						},
+					},
+				},
+				member: {
+					modelName: "coreMembers",
+				},
+				invitation: {
+					modelName: "coreInvitations",
+				},
+			},
+		}),
+	],
 	advanced: {
 		database: {
 			generateId: false,
