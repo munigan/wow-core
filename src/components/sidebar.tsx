@@ -39,7 +39,7 @@ export const Sidebar = ({ user }: SidebarProps) => {
 				{/* Core selector (placeholder) */}
 				<div className="flex flex-col gap-1">
 					<span className="font-body text-2xs font-bold uppercase tracking-wide text-muted">
-						// Active Core
+						{"// Active Core"}
 					</span>
 					<SelectRoot defaultValue="frostmourne">
 						<SelectTrigger className="w-full" />
@@ -58,7 +58,7 @@ export const Sidebar = ({ user }: SidebarProps) => {
 				{/* System info (placeholder) */}
 				<div className="flex flex-col gap-1.5">
 					<span className="font-body text-2xs text-muted">
-						v2.4.1 // uwu-logs
+						{"v2.4.1 // uwu-logs"}
 					</span>
 					<span className="font-body text-2xs text-muted">LAST SYNC: —</span>
 				</div>

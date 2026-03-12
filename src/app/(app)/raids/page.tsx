@@ -6,7 +6,7 @@ export default function RaidsPage() {
 					Raid Details
 				</h1>
 				<p className="font-body text-sm text-secondary">
-					Boss encounters and performance metrics
+					{"// Boss encounters and performance metrics"}
 				</p>
 			</div>
 		</div>

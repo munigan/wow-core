@@ -6,7 +6,7 @@ export default function MembersPage() {
 					Members
 				</h1>
 				<p className="font-body text-sm text-secondary">
-					Roster and individual performance
+					{"// Roster and individual performance"}
 				</p>
 			</div>
 		</div>

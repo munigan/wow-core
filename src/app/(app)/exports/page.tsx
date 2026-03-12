@@ -6,7 +6,7 @@ export default function ExportsPage() {
 					Exports
 				</h1>
 				<p className="font-body text-sm text-secondary">
-					Download and share raid data
+					{"// Download and share raid data"}
 				</p>
 			</div>
 		</div>

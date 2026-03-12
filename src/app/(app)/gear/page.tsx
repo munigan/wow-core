@@ -6,7 +6,7 @@ export default function GearPage() {
 					Gear & Enchants
 				</h1>
 				<p className="font-body text-sm text-secondary">
-					Equipment audit and enchant compliance
+					{"// Equipment audit and enchant compliance"}
 				</p>
 			</div>
 		</div>

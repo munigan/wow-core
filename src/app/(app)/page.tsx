@@ -6,7 +6,7 @@ export default function DashboardPage() {
 					Overview
 				</h1>
 				<p className="font-body text-sm text-secondary">
-					// Raid Core Analyzer
+					{"// Raid Core Analyzer"}
 				</p>
 			</div>
 		</div>
