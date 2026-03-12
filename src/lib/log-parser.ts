@@ -9,6 +9,14 @@ export type ParseResult = {
 	players: ParsedPlayer[];
 };
 
+export type ParseResultMulti = {
+	raids: {
+		raidDate: Date;
+		raidName: string;
+		players: ParsedPlayer[];
+	}[];
+};
+
 export async function parseLogStream(
 	stream: ReadableStream<Uint8Array>,
 ): Promise<ParseResult> {
@@ -66,6 +74,126 @@ export async function parseLogStream(
 			name,
 		})),
 	};
+}
+
+function extractDateKey(line: string): string | null {
+	const match = line.match(/^(\d{1,2})\/(\d{1,2})\s/);
+	if (!match) return null;
+	return `${Number.parseInt(match[1], 10)}/${Number.parseInt(match[2], 10)}`;
+}
+
+type DateBucket = {
+	players: Map<string, string>;
+	firstLine: Date;
+	raidDate: Date;
+};
+
+export async function parseLogStreamMulti(
+	stream: ReadableStream<Uint8Array>,
+	selectedDateGroups: string[][],
+): Promise<ParseResultMulti> {
+	const dateBuckets = new Map<string, DateBucket>();
+
+	const textStream = stream.pipeThrough(
+		new TextDecoderStream() as ReadableWritablePair<string, Uint8Array>,
+	);
+	const reader = textStream.getReader();
+
+	let buffer = "";
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+
+		buffer += value;
+		const lines = buffer.split("\n");
+		buffer = lines.pop() ?? "";
+
+		for (const line of lines) {
+			processMultiLine(line, dateBuckets);
+		}
+	}
+
+	if (buffer.trim()) {
+		processMultiLine(buffer, dateBuckets);
+	}
+
+	const raids: ParseResultMulti["raids"] = [];
+
+	for (const dateGroup of selectedDateGroups) {
+		const combinedPlayers = new Map<string, string>();
+		let raidDate: Date | null = null;
+
+		for (const dateKey of dateGroup) {
+			const bucket = dateBuckets.get(dateKey);
+			if (!bucket) continue;
+
+			for (const [guid, name] of bucket.players) {
+				combinedPlayers.set(guid, name);
+			}
+
+			if (raidDate === null) {
+				raidDate = bucket.raidDate;
+			}
+		}
+
+		const firstDate = dateGroup[0];
+		const lastDate = dateGroup[dateGroup.length - 1];
+		const raidName =
+			dateGroup.length === 1
+				? `Raid ${firstDate}`
+				: `Raid ${firstDate} - ${lastDate}`;
+
+		raids.push({
+			raidDate: raidDate ?? new Date(),
+			raidName,
+			players: Array.from(combinedPlayers.entries()).map(([guid, name]) => ({
+				guid,
+				name,
+			})),
+		});
+	}
+
+	return { raids };
+}
+
+function processMultiLine(
+	line: string,
+	dateBuckets: Map<string, DateBucket>,
+): void {
+	const dateKey = extractDateKey(line);
+	if (!dateKey) return;
+
+	let bucket = dateBuckets.get(dateKey);
+	if (!bucket) {
+		const parsedDate = extractDate(line);
+		if (!parsedDate) return;
+		bucket = {
+			players: new Map(),
+			firstLine: parsedDate,
+			raidDate: parsedDate,
+		};
+		dateBuckets.set(dateKey, bucket);
+	}
+
+	const doubleSpaceIdx = line.indexOf("  ");
+	if (doubleSpaceIdx === -1) return;
+
+	const eventPart = line.slice(doubleSpaceIdx + 2);
+	const fields = parseFields(eventPart);
+	if (fields.length < 7) return;
+
+	const sourceGuid = fields[1];
+	const sourceName = stripQuotes(fields[2]);
+	const destGuid = fields[4];
+	const destName = stripQuotes(fields[5]);
+
+	if (sourceGuid?.startsWith("0x0E") && sourceName) {
+		bucket.players.set(sourceGuid, sourceName);
+	}
+	if (destGuid?.startsWith("0x0E") && destName && destName !== "nil") {
+		bucket.players.set(destGuid, destName);
+	}
 }
 
 function processLine(
