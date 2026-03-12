@@ -80,6 +80,8 @@ export type RaidTimeRange = {
 	dates: string[];
 	startTime: string;
 	endTime: string;
+	/** Per-segment time ranges for interleaved raids (more precise than startTime/endTime). */
+	timeRanges?: { startTime: string; endTime: string }[];
 };
 
 export async function parseLogStreamMulti(
@@ -94,18 +96,28 @@ export async function parseLogStreamMulti(
 		}
 	}
 
-	// Per-raid player buckets with time-range filtering
+	// Per-raid player buckets with time-range filtering.
+	// When timeRanges is provided (interleaved raids), use those for precise filtering.
+	// Otherwise fall back to the single startTime/endTime range.
 	const raidBuckets: {
 		players: Map<string, string>;
 		raidDate: Date | null;
-		startMs: number;
-		endMs: number;
-	}[] = raidTimeRanges.map((range) => ({
-		players: new Map(),
-		raidDate: null,
-		startMs: new Date(range.startTime).getTime(),
-		endMs: new Date(range.endTime).getTime(),
-	}));
+		ranges: { startMs: number; endMs: number }[];
+	}[] = raidTimeRanges.map((range) => {
+		const ranges =
+			range.timeRanges && range.timeRanges.length > 0
+				? range.timeRanges.map((tr) => ({
+						startMs: new Date(tr.startTime).getTime(),
+						endMs: new Date(tr.endTime).getTime(),
+					}))
+				: [
+						{
+							startMs: new Date(range.startTime).getTime(),
+							endMs: new Date(range.endTime).getTime(),
+						},
+					];
+		return { players: new Map(), raidDate: null, ranges };
+	});
 
 	const textStream = stream.pipeThrough(
 		new TextDecoderStream() as ReadableWritablePair<string, Uint8Array>,
@@ -163,8 +175,7 @@ function processMultiLineWithTimeRange(
 	raidBuckets: {
 		players: Map<string, string>;
 		raidDate: Date | null;
-		startMs: number;
-		endMs: number;
+		ranges: { startMs: number; endMs: number }[];
 	}[],
 ): void {
 	const spaceIdx = line.indexOf(" ");
@@ -191,7 +202,10 @@ function processMultiLineWithTimeRange(
 
 	// Assign this line's players to all matching raid buckets by time range
 	for (const bucket of raidBuckets) {
-		if (timestampMs < bucket.startMs || timestampMs > bucket.endMs) continue;
+		const isInRange = bucket.ranges.some(
+			(r) => timestampMs >= r.startMs && timestampMs <= r.endMs,
+		);
+		if (!isInRange) continue;
 
 		if (bucket.raidDate === null) {
 			bucket.raidDate = timestamp;

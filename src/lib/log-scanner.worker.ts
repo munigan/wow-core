@@ -208,13 +208,13 @@ function processLine(
 		if (currentSegment.raidInstance === null) {
 			currentSegment.raidInstance = bossInstance;
 		} else if (bossInstance !== currentSegment.raidInstance) {
-			// Instance changed — create new segment
+			// Instance changed — create new segment (empty players — will accumulate from subsequent lines)
 			currentSegment = {
 				date: dateStr,
 				segmentIndex: dateSegments.length,
 				firstTimestamp: timestamp,
 				lastTimestamp: timestamp,
-				players: new Map(currentSegment.players),
+				players: new Map(),
 				npcs: new Map(),
 				raidInstance: bossInstance,
 			};

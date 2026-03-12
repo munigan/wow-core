@@ -11,6 +11,7 @@ type SelectedRaidPayload = {
 	dates: string[];
 	startTime: string;
 	endTime: string;
+	timeRanges?: { startTime: string; endTime: string }[];
 	coreId: string;
 	raidName: string;
 };
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
 				dates: r.dates,
 				startTime: r.startTime,
 				endTime: r.endTime,
+				timeRanges: r.timeRanges,
 			}));
 			const multiResult = await parseLogStreamMulti(body, raidTimeRanges);
 

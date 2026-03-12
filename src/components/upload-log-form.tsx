@@ -162,7 +162,6 @@ export function UploadLogForm({
 	const fileRef = useRef<File | null>(null);
 	const inputRef = useRef<HTMLInputElement | null>(null);
 	const hasAppliedDefaultsRef = useRef(false);
-	const hasAppliedDuplicateDefaultsRef = useRef(false);
 
 	const membersQuery = trpc.members.listByCores.useQuery(
 		{ coreIds: cores.map((c) => c.id) },
@@ -185,13 +184,16 @@ export function UploadLogForm({
 		return map;
 	}, [membersQuery.data]);
 
-	// Smart default core assignment when members data arrives (runs once per scan)
+	// Smart core assignment + duplicate detection (runs once per scan when both queries resolve)
 	useEffect(() => {
 		if (state.step !== "choose") return;
 		if (hasAppliedDefaultsRef.current) return;
 		if (membersByCore.size === 0) return;
+		if (!existingRaidsQuery.data) return;
 
 		hasAppliedDefaultsRef.current = true;
+
+		const existingRaids = existingRaidsQuery.data;
 
 		setState((prev) => {
 			if (prev.step !== "choose") return prev;
@@ -204,6 +206,7 @@ export function UploadLogForm({
 						coreId: activeCoreId ?? cores[0]?.id ?? "",
 					};
 
+				// Step 1: determine best core by member overlap
 				let bestCoreId = existing.coreId;
 				let bestOverlap = -1;
 
@@ -217,39 +220,23 @@ export function UploadLogForm({
 					}
 				}
 
-				return { ...existing, coreId: bestCoreId };
-			});
-
-			return { ...prev, raidConfigs: updatedConfigs };
-		});
-	}, [state.step, membersByCore, cores, activeCoreId]);
-
-	// Uncheck likely-duplicate raids when existing raids data arrives (runs once per scan)
-	useEffect(() => {
-		if (state.step !== "choose") return;
-		if (hasAppliedDuplicateDefaultsRef.current) return;
-		if (!existingRaidsQuery.data) return;
-
-		hasAppliedDuplicateDefaultsRef.current = true;
-
-		setState((prev) => {
-			if (prev.step !== "choose") return prev;
-
-			const updatedConfigs = prev.raidConfigs.map((config, i) => {
-				const raid = prev.raids[i];
-				if (!raid) return config;
+				// Step 2: check for duplicate using the resolved coreId
 				const { isDuplicate } = checkLikelyDuplicate(
 					raid,
-					config.coreId,
-					existingRaidsQuery.data,
+					bestCoreId,
+					existingRaids,
 				);
-				if (isDuplicate) return { ...config, isSelected: false };
-				return config;
+
+				return {
+					...existing,
+					coreId: bestCoreId,
+					isSelected: isDuplicate ? false : existing.isSelected,
+				};
 			});
 
 			return { ...prev, raidConfigs: updatedConfigs };
 		});
-	}, [state.step, existingRaidsQuery.data]);
+	}, [state.step, membersByCore, existingRaidsQuery.data, cores, activeCoreId]);
 
 	// Cleanup worker on unmount
 	useEffect(() => {
@@ -267,7 +254,6 @@ export function UploadLogForm({
 
 			fileRef.current = file;
 			hasAppliedDefaultsRef.current = false;
-			hasAppliedDuplicateDefaultsRef.current = false;
 			setState({ step: "scanning", progress: 0 });
 
 			const worker = new Worker(
@@ -400,6 +386,7 @@ export function UploadLogForm({
 				dates: raid.dates,
 				startTime: raid.startTime,
 				endTime: raid.endTime,
+				timeRanges: raid.timeRanges,
 				coreId: config.coreId,
 				raidName: formatRaidLabel(raid),
 			}));

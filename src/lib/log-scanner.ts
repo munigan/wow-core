@@ -4,6 +4,8 @@ export type DetectedRaid = {
 	dates: string[];
 	startTime: string;
 	endTime: string;
+	/** Per-segment time ranges for interleaved raids (e.g., OS → EoE → OS). */
+	timeRanges: { startTime: string; endTime: string }[];
 	playerCount: number;
 	playerNames: string[];
 	npcNames: string[];
@@ -150,8 +152,12 @@ export function mergeSegmentsByRoster(segments: Segment[]): Segment[] {
 }
 
 /**
- * Detect raids from an array of Segments by grouping consecutive segments
+ * Detect raids from an array of Segments by grouping segments
  * with similar player rosters (Jaccard similarity > threshold).
+ *
+ * When segments have a known raidInstance, segments from the same instance
+ * are consolidated into a single raid group even if they're non-consecutive
+ * (e.g., OS → EoE → OS → EoE interleaving).
  *
  * Sorts segments chronologically before processing.
  */
@@ -167,22 +173,43 @@ export function detectRaids(segments: Segment[]): DetectedRaid[] {
 	const raidGroups: Segment[][] = [[sorted[0]]];
 
 	for (let i = 1; i < sorted.length; i++) {
-		const currentGroup = raidGroups[raidGroups.length - 1];
-		const lastSegment = currentGroup[currentGroup.length - 1];
-		const similarity = jaccardSimilarity(
-			lastSegment.players,
-			sorted[i].players,
-		);
+		const seg = sorted[i];
+		let placed = false;
 
-		const crossInstance =
-			lastSegment.raidInstance !== null &&
-			sorted[i].raidInstance !== null &&
-			lastSegment.raidInstance !== sorted[i].raidInstance;
+		// If this segment has a known instance, try to find an existing group
+		// with the same instance on the same date (consolidate interleaved runs
+		// like OS → EoE → OS → EoE). No roster check needed — same instance +
+		// same date is sufficient since these are from the same logging session.
+		if (seg.raidInstance) {
+			for (const group of raidGroups) {
+				const representative = group[0];
+				if (
+					representative.raidInstance === seg.raidInstance &&
+					representative.date === seg.date
+				) {
+					group.push(seg);
+					placed = true;
+					break;
+				}
+			}
+		}
 
-		if (!crossInstance && similarity > JACCARD_THRESHOLD) {
-			currentGroup.push(sorted[i]);
-		} else {
-			raidGroups.push([sorted[i]]);
+		if (!placed) {
+			// Fall back to consecutive grouping: check last group
+			const currentGroup = raidGroups[raidGroups.length - 1];
+			const lastSegment = currentGroup[currentGroup.length - 1];
+			const similarity = jaccardSimilarity(lastSegment.players, seg.players);
+
+			const crossInstance =
+				lastSegment.raidInstance !== null &&
+				seg.raidInstance !== null &&
+				lastSegment.raidInstance !== seg.raidInstance;
+
+			if (!crossInstance && similarity > JACCARD_THRESHOLD) {
+				currentGroup.push(seg);
+			} else {
+				raidGroups.push([seg]);
+			}
 		}
 	}
 
@@ -193,13 +220,22 @@ function buildDetectedRaid(group: Segment[]): DetectedRaid {
 	const dateSet = new Set<string>();
 	let startTime = new Date(group[0].firstTimestamp);
 	let endTime = new Date(group[0].lastTimestamp);
+	const timeRanges: { startTime: string; endTime: string }[] = [];
+
 	const allPlayers = new Map<string, string>();
+	// Track player lists per segment for multi-segment raids
+	const segmentPlayerLists: Map<string, string>[] = [];
 
 	for (const seg of group) {
 		dateSet.add(seg.date);
 
 		const segStart = new Date(seg.firstTimestamp);
 		const segEnd = new Date(seg.lastTimestamp);
+
+		timeRanges.push({
+			startTime: segStart.toISOString(),
+			endTime: segEnd.toISOString(),
+		});
 
 		if (segStart.getTime() < startTime.getTime()) {
 			startTime = segStart;
@@ -211,9 +247,22 @@ function buildDetectedRaid(group: Segment[]): DetectedRaid {
 		for (const [guid, name] of seg.players) {
 			allPlayers.set(guid, name);
 		}
+
+		segmentPlayerLists.push(seg.players);
 	}
 
-	const uniqueNames = [...new Set(allPlayers.values())];
+	// For multi-segment raids (interleaved instances), some segments accumulate
+	// bystander players from between encounters. Use the smallest segment as the
+	// representative — smaller segments are cleaner (actual raid participants only)
+	// since they don't include long inter-encounter gaps with bystander events.
+	let representativePlayers: Map<string, string>;
+	if (group.length > 1) {
+		const sorted = [...segmentPlayerLists].sort((a, b) => a.size - b.size);
+		representativePlayers = sorted[0];
+	} else {
+		representativePlayers = allPlayers;
+	}
+	const uniqueNames = [...new Set(representativePlayers.values())];
 
 	const allNpcs = new Map<string, string>();
 	for (const seg of group) {
@@ -228,6 +277,7 @@ function buildDetectedRaid(group: Segment[]): DetectedRaid {
 		dates: [...dateSet],
 		startTime: startTime.toISOString(),
 		endTime: endTime.toISOString(),
+		timeRanges,
 		playerCount: uniqueNames.length,
 		playerNames: uniqueNames,
 		npcNames: uniqueNpcNames,
