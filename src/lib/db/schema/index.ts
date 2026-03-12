@@ -1,10 +1,12 @@
 import { accounts } from "./accounts";
+import { coreMembers } from "./core-members";
 import { cores } from "./cores";
 import { sessions } from "./sessions";
 import { users } from "./users";
 import { verifications } from "./verifications";
 
 export { accounts } from "./accounts";
+export { coreMembers } from "./core-members";
 export { cores } from "./cores";
 export { sessions } from "./sessions";
 export { users } from "./users";
@@ -16,4 +18,5 @@ export const schema = {
 	accounts,
 	verifications,
 	cores,
+	coreMembers,
 };
