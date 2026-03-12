@@ -24,3 +24,31 @@ Use `schema.users` in queries, not bare `users`.
 - **Table names**: plural (`users`, `sessions`, `accounts`, `verifications`) with `modelName` config on `user` and `session`
 - **Session check (server)**: `auth.api.getSession({ headers: await headers() })`
 - **Session check (client)**: `authClient.useSession()`
+
+## tRPC
+
+- **Version**: v11 (`@trpc/server`, `@trpc/client`, `@trpc/react-query`)
+- **Init**: `src/lib/trpc/init.ts` — `createTRPCContext` (auth-aware), `createTRPCRouter`, `baseProcedure`, `protectedProcedure`
+- **Context**: Calls `auth.api.getSession({ headers })` and exposes `{ session, user, coreId }`. `protectedProcedure` validates all three are non-null.
+- **Server caller (RSC)**: `src/lib/trpc/server.ts` — exports `trpc` (for server components) and `HydrateClient` (for prefetching). Import from `@/lib/trpc/server`.
+- **Client provider**: `src/lib/trpc/client.tsx` — exports `trpc` (for client hooks) and `TRPCProvider`. Uses `splitLink` routing non-JSON to `httpLink`, everything else to `httpBatchStreamLink`.
+- **Query client**: `src/lib/trpc/query-client.ts` — shared `makeQueryClient()` factory used by both server and client.
+- **Routers**: `src/lib/trpc/routers/_app.ts` merges sub-routers. Each sub-router in its own file (e.g., `raids.ts`, `members.ts`).
+- **API route**: `src/app/api/trpc/[...trpc]/route.ts` — fetch adapter handler.
+- **Providers**: `src/app/providers.tsx` wraps with `TRPCProvider` which includes `QueryClientProvider` internally.
+
+### Adding a new tRPC procedure
+
+1. Create or modify a router file in `src/lib/trpc/routers/`
+2. Use `protectedProcedure` for auth-required endpoints
+3. Access `ctx.coreId` for the active core
+4. Merge into `_app.ts` if new router
+
+## Upload API
+
+- **Route**: `POST /api/upload` at `src/app/api/upload/route.ts`
+- **Not tRPC**: Raw Next.js route handler for streaming binary upload
+- **Auth**: Validates session + active core via `auth.api.getSession()`
+- **Parser**: `src/lib/log-parser.ts` — `parseLogStream(ReadableStream)` returns `{ raidDate, raidName, players[] }`
+- **Flow**: Stream body -> parse players (0x0E GUID prefix) -> create raid -> upsert members -> insert raidMembers -> return JSON
+- **Response**: `{ raidId, raidName, raidDate, totalMembers, newMembers }`
