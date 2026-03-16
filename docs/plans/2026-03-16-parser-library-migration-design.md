@@ -18,7 +18,7 @@ The new library (`@munigan/wow-combatlog-parser`) replaces all of this with a te
 - **UI stays the same** — same 5-step state machine, same data shown during scanning. Richer data from the library (encounters, combat stats, etc.) will be surfaced in future iterations.
 - **Web Worker preserved** — `scanLog()` runs inside a Worker to avoid UI jank on large files.
 - **XHR upload preserved** — keeps native upload progress tracking and cancel support.
-- **Server streams, no DB** — the upload endpoint uses `parseLogStream()` with streaming callbacks but does not persist to the database yet. Returns parsed results as JSON.
+- **Server streams, no DB** — the upload endpoint uses `parseLog()` (batch, streaming internally) to process multiple raid selections in a single pass. Does not persist to the database yet. Returns parsed results as JSON.
 - **Old code deleted** — clean break, no backup files.
 
 ## File Changes
@@ -29,7 +29,7 @@ The new library (`@munigan/wow-combatlog-parser`) replaces all of this with a te
 |------|--------|
 | `src/lib/log-scanner.ts` | Replaced by library's `scanLog()` + types |
 | `src/lib/log-scanner.worker.ts` | Replaced by new `scan.worker.ts` |
-| `src/lib/log-parser.ts` | Replaced by library's `parseLogStream()` |
+| `src/lib/log-parser.ts` | Replaced by library's `parseLog()` |
 | `src/lib/wow-raids.ts` | Replaced by library's built-in boss data |
 
 ### Create (1 file)
@@ -90,9 +90,8 @@ Flow:
 
 1. Auth check (unchanged)
 2. Parse `X-Selected-Raids` header into `RaidSelection[]`
-3. Stream `request.body` through `parseLogStream(body, selections, callbacks)`
-4. Collect encounter and summary data via callbacks
-5. Return parsed results as JSON (no database writes)
+3. Call `parseLog(request.body, selections)` — streams internally, returns `ParseResult` with one `ParsedRaid` per selection
+4. Return parsed results as JSON (no database writes)
 
 Response shape per raid:
 
