@@ -19,11 +19,6 @@ import {
 	SelectRoot,
 	SelectTrigger,
 } from "@/components/ui/select";
-import {
-	TooltipContent,
-	TooltipRoot,
-	TooltipTrigger,
-} from "@/components/ui/tooltip";
 import type { ScanMessage } from "@/lib/scan.worker";
 import { trpc } from "@/lib/trpc/client";
 
@@ -89,6 +84,20 @@ function formatRaidLabel(raid: DetectedRaid): string {
 	const endDay = endDate.getDate();
 	const endOrdinal = getOrdinalSuffix(endDay);
 	return `${instance} - ${monthName} ${day}${ordinal} - ${endDay}${endOrdinal}`;
+}
+
+function formatDateHeader(raid: DetectedRaid): string {
+	const date = new Date(raid.startTime);
+	const monthName = date
+		.toLocaleDateString("en-US", { month: "long" })
+		.toUpperCase();
+	const day = date.getDate();
+	const ordinal = getOrdinalSuffix(day).toUpperCase();
+	return `${monthName} ${day}${ordinal}`;
+}
+
+function formatRaidName(raid: DetectedRaid): string {
+	return raid.raidInstance ?? "Unknown Raid";
 }
 
 function formatTimeRange(raid: DetectedRaid): string {
@@ -219,7 +228,7 @@ export function UploadLogForm({
 				const existing = prev.raidConfigs[i];
 				if (!existing)
 					return {
-						isSelected: true,
+						isSelected: false,
 						coreId: activeCoreId ?? cores[0]?.id ?? "",
 					};
 
@@ -240,17 +249,9 @@ export function UploadLogForm({
 					}
 				}
 
-				// Step 2: check for duplicate using the resolved coreId
-				const { isDuplicate } = checkLikelyDuplicate(
-					raid,
-					bestCoreId,
-					existingRaids,
-				);
-
 				return {
 					...existing,
 					coreId: bestCoreId,
-					isSelected: isDuplicate ? false : existing.isSelected,
 				};
 			});
 
@@ -313,7 +314,7 @@ export function UploadLogForm({
 							step: "choose",
 							raids,
 							raidConfigs: raids.map(() => ({
-								isSelected: true,
+								isSelected: false,
 								coreId: defaultCoreId,
 							})),
 						});
@@ -492,143 +493,165 @@ export function UploadLogForm({
 			});
 		};
 
-		const isImportDisabled = raidConfigs.every((c) => !c.isSelected);
+		const selectedCount = raidConfigs.filter((c) => c.isSelected).length;
+		const isImportDisabled = selectedCount === 0;
+
+		// Group raids by date header
+		const dateGroups: {
+			header: string;
+			items: { raid: DetectedRaid; index: number }[];
+		}[] = [];
+		for (let i = 0; i < raids.length; i++) {
+			const raid = raids[i];
+			const header = formatDateHeader(raid);
+			const lastGroup = dateGroups[dateGroups.length - 1];
+			if (lastGroup && lastGroup.header === header) {
+				lastGroup.items.push({ raid, index: i });
+			} else {
+				dateGroups.push({ header, items: [{ raid, index: i }] });
+			}
+		}
 
 		return (
-			<div className="flex flex-col gap-4">
+			<div className="flex flex-col gap-6">
 				{/* Raid list */}
 				<ScrollAreaRoot>
 					<ScrollAreaViewport className="max-h-96">
-						<div className="flex flex-col gap-2.5">
-							{raids.map((raid, index) => {
-								const config = raidConfigs[index];
-								if (!config) return null;
-
-								const coreMembers = membersByCore.get(config.coreId) ?? [];
-								const overlap = computeOverlap(
-									raid.players.map((p) => p.name),
-									coreMembers,
-								);
-								const isMismatch = overlap < 0.3;
-
-								const duplicateInfo = existingRaidsQuery.data
-									? checkLikelyDuplicate(
-											raid,
-											config.coreId,
-											existingRaidsQuery.data,
-										)
-									: { isDuplicate: false };
-
-								return (
-									<div
-										key={`${raid.startTime}-${raid.endTime}`}
-										className="flex flex-col border border-border"
-									>
-										<div className="flex items-start gap-2.5 px-3 py-2.5">
-											<CheckboxRoot
-												checked={config.isSelected}
-												onCheckedChangeAction={() => handleToggleRaid(index)}
-												className="mt-0.5"
-											/>
-											<div className="flex min-w-0 flex-1 flex-col gap-1">
-												<div className="flex items-center gap-1.5">
-													<span className="font-body text-xs font-semibold text-primary">
-														{formatRaidLabel(raid)}
-													</span>
-													{duplicateInfo.isDuplicate && (
-														<TooltipRoot>
-															<TooltipTrigger render={<span />}>
-																<span className="cursor-default font-body text-2xs text-warning">
-																	Likely duplicate
-																</span>
-															</TooltipTrigger>
-															<TooltipContent side="top">
-																<span className="font-body text-2xs text-primary">
-																	&quot;{duplicateInfo.existingName}&quot; on{" "}
-																	{duplicateInfo.existingDate} already exists in
-																	this core
-																</span>
-															</TooltipContent>
-														</TooltipRoot>
-													)}
-												</div>
-												<span className="font-body text-2xs text-dimmed">
-													{formatTimeRange(raid)}
-												</span>
-												<div className="flex flex-wrap items-baseline gap-1">
-													<span className="font-body text-2xs text-dimmed">
-														{raid.players
-															.slice(0, 3)
-															.map((p) => p.name)
-															.join(", ")}
-													</span>
-													{raid.playerCount > 3 && (
-														<TooltipRoot>
-															<TooltipTrigger render={<span />}>
-																<span className="cursor-default font-body text-2xs text-accent">
-																	+{raid.playerCount - 3} more
-																</span>
-															</TooltipTrigger>
-															<TooltipContent side="bottom">
-																<div className="max-h-48 overflow-y-auto">
-																	{raid.players.map((player) => (
-																		<span
-																			key={player.name}
-																			className="block font-body text-2xs text-primary"
-																		>
-																			{player.name}
-																		</span>
-																	))}
-																</div>
-															</TooltipContent>
-														</TooltipRoot>
-													)}
-												</div>
-											</div>
-											<div className="shrink-0">
-												<SelectRoot
-													value={config.coreId}
-													items={coreItems}
-													disabled={!config.isSelected}
-													onValueChangeAction={(value) =>
-														handleCoreChange(index, value)
-													}
-												>
-													<SelectTrigger placeholder="Core" className="w-36" />
-													<SelectPopup>
-														{cores.map((c) => (
-															<SelectItem key={c.id} value={c.id}>
-																{c.name}
-															</SelectItem>
-														))}
-													</SelectPopup>
-												</SelectRoot>
-											</div>
-										</div>
-										{isMismatch && (
-											<Alert
-												variant="warning"
-												message="Low member overlap with selected core"
-												className="border-x-0 border-b-0 text-2xs"
-											/>
-										)}
+						<div className="flex flex-col gap-7">
+							{dateGroups.map((group) => (
+								<div key={group.header} className="flex flex-col gap-3">
+									{/* Date section header */}
+									<div className="flex items-center gap-2">
+										<span className="shrink-0 font-body text-2xs font-bold tracking-wider text-muted">
+											{"// "}
+											{group.header}
+										</span>
+										<div className="h-px flex-1 bg-border" />
 									</div>
-								);
-							})}
+
+									{/* Raid cards */}
+									<div className="flex flex-col gap-3">
+										{group.items.map(({ raid, index }) => {
+											const config = raidConfigs[index];
+											if (!config) return null;
+
+											const coreMembers =
+												membersByCore.get(config.coreId) ?? [];
+											const overlap = computeOverlap(
+												raid.players.map((p) => p.name),
+												coreMembers,
+											);
+											const isMismatch = overlap < 0.3;
+
+											const duplicateInfo = existingRaidsQuery.data
+												? checkLikelyDuplicate(
+														raid,
+														config.coreId,
+														existingRaidsQuery.data,
+													)
+												: { isDuplicate: false };
+
+											return (
+												<div
+													key={`${raid.startTime}-${raid.endTime}`}
+													className={`flex flex-col overflow-hidden border bg-card ${
+														config.isSelected
+															? "border-accent-40"
+															: "border-border"
+													}`}
+												>
+													<div className="flex items-center gap-3.5 px-5 py-4">
+														<CheckboxRoot
+															checked={config.isSelected}
+															onCheckedChangeAction={() =>
+																handleToggleRaid(index)
+															}
+														/>
+														<div className="flex min-w-0 flex-1 flex-col gap-1">
+															<div className="flex items-center gap-2.5">
+																<span className="font-heading text-base font-bold text-primary">
+																	{formatRaidName(raid)}
+																</span>
+																{duplicateInfo.isDuplicate && (
+																	<span className="bg-warning-20 px-2 py-0.5 font-body text-3xs font-bold uppercase tracking-wider text-warning">
+																		Likely duplicate
+																	</span>
+																)}
+															</div>
+															<div className="flex items-center gap-2 font-body text-2xs">
+																<span className="text-muted">
+																	{formatTimeRange(raid)}
+																</span>
+																<span className="text-muted">·</span>
+																<span className="text-secondary">
+																	{raid.playerCount} members
+																</span>
+															</div>
+														</div>
+														<div className="shrink-0">
+															<SelectRoot
+																value={config.coreId}
+																items={coreItems}
+																disabled={!config.isSelected}
+																onValueChangeAction={(value) =>
+																	handleCoreChange(index, value)
+																}
+															>
+																<SelectTrigger
+																	placeholder="Core"
+																	className="w-36"
+																/>
+																<SelectPopup>
+																	{cores.map((c) => (
+																		<SelectItem key={c.id} value={c.id}>
+																			{c.name}
+																		</SelectItem>
+																	))}
+																</SelectPopup>
+															</SelectRoot>
+														</div>
+													</div>
+													{isMismatch && config.isSelected && (
+														<Alert
+															variant="warning"
+															message="Low member overlap with selected core"
+															className="border-x-0 border-b-0 text-2xs"
+														/>
+													)}
+												</div>
+											);
+										})}
+									</div>
+								</div>
+							))}
 						</div>
 					</ScrollAreaViewport>
 					<ScrollAreaScrollbar />
 				</ScrollAreaRoot>
 
-				{/* Import button */}
-				<Button
-					type="button"
-					className="w-full"
-					disabled={isImportDisabled}
-					onClick={handleUpload}
-				>
-					Import Selected
-				</Button>
+				{/* Footer */}
+				<div className="flex flex-col gap-4">
+					<div className="h-px bg-border" />
+					<div className="flex gap-3">
+						<Button
+							type="button"
+							variant="secondary"
+							className="w-full"
+							onClick={() => setState({ step: "select" })}
+						>
+							Cancel
+						</Button>
+						<Button
+							type="button"
+							className="w-full"
+							disabled={isImportDisabled}
+							onClick={handleUpload}
+						>
+							<Upload className="size-3.5" />
+							{`Import ${selectedCount} ${selectedCount === 1 ? "Raid" : "Raids"}`}
+						</Button>
+					</div>
+				</div>
 			</div>
 		);
 	}
