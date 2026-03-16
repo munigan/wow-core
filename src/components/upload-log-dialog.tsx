@@ -1,7 +1,7 @@
 "use client";
 
 import { Upload } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	DialogContent,
@@ -19,9 +19,23 @@ type UploadLogDialogProps = {
 
 export function UploadLogDialog({ cores, activeCoreId }: UploadLogDialogProps) {
 	const [isOpen, setIsOpen] = useState(false);
+	const hasProgressRef = useRef(false);
+
+	const handleOpenChange = useCallback((open: boolean) => {
+		if (!open && hasProgressRef.current) {
+			const confirmed = window.confirm(
+				"You have an upload in progress. Are you sure you want to close?",
+			);
+			if (!confirmed) return;
+		}
+		if (open) {
+			hasProgressRef.current = false;
+		}
+		setIsOpen(open);
+	}, []);
 
 	return (
-		<DialogRoot open={isOpen} onOpenChangeAction={setIsOpen}>
+		<DialogRoot open={isOpen} onOpenChangeAction={handleOpenChange}>
 			<DialogTrigger
 				render={
 					<Button className="w-full">
@@ -39,6 +53,9 @@ export function UploadLogDialog({ cores, activeCoreId }: UploadLogDialogProps) {
 					cores={cores}
 					activeCoreId={activeCoreId}
 					onDoneAction={() => setIsOpen(false)}
+					onProgressChangeAction={(hasProgress) => {
+						hasProgressRef.current = hasProgress;
+					}}
 				/>
 			</DialogContent>
 		</DialogRoot>

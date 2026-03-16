@@ -1,7 +1,7 @@
 "use client";
 
 import type { DetectedRaid } from "@munigan/wow-combatlog-parser";
-import { AlertTriangle, CheckCircle, FileText, Upload, X } from "lucide-react";
+import { CheckCircle, FileText, Upload, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "@/components/ui/alert";
@@ -46,6 +46,7 @@ type UploadLogFormProps = {
 	cores: { id: string; name: string }[];
 	activeCoreId: string | null;
 	onDoneAction: () => void;
+	onProgressChangeAction?: (hasProgress: boolean) => void;
 };
 
 function formatSize(bytes: number): string {
@@ -154,9 +155,20 @@ export function UploadLogForm({
 	cores,
 	activeCoreId,
 	onDoneAction,
+	onProgressChangeAction,
 }: UploadLogFormProps) {
 	const router = useRouter();
 	const [state, setState] = useState<UploadState>({ step: "select" });
+
+	// Notify parent when the form has in-progress work
+	useEffect(() => {
+		const hasProgress =
+			state.step === "scanning" ||
+			state.step === "choose" ||
+			state.step === "uploading";
+		onProgressChangeAction?.(hasProgress);
+	}, [state.step, onProgressChangeAction]);
+
 	const xhrRef = useRef<XMLHttpRequest | null>(null);
 	const workerRef = useRef<Worker | null>(null);
 	const fileRef = useRef<File | null>(null);
@@ -503,89 +515,95 @@ export function UploadLogForm({
 						return (
 							<div
 								key={`${raid.startTime}-${raid.endTime}`}
-								className="flex items-start gap-2.5 border border-border px-3 py-2.5"
+								className="flex flex-col border border-border"
 							>
-								<CheckboxRoot
-									checked={config.isSelected}
-									onCheckedChangeAction={() => handleToggleRaid(index)}
-									className="mt-0.5"
-								/>
-								<div className="flex min-w-0 flex-1 flex-col gap-1">
-									<div className="flex items-center gap-1.5">
-										<span className="font-body text-xs font-semibold text-primary">
-											{formatRaidLabel(raid)}
-										</span>
-										{duplicateInfo.isDuplicate && (
-											<TooltipRoot>
-												<TooltipTrigger render={<span />}>
-													<span className="cursor-default font-body text-2xs text-warning">
-														Likely duplicate
-													</span>
-												</TooltipTrigger>
-												<TooltipContent side="top">
-													<span className="font-body text-2xs text-primary">
-														&quot;{duplicateInfo.existingName}&quot; on{" "}
-														{duplicateInfo.existingDate} already exists in this
-														core
-													</span>
-												</TooltipContent>
-											</TooltipRoot>
-										)}
-									</div>
-									<span className="font-body text-2xs text-dimmed">
-										{formatTimeRange(raid)}
-									</span>
-									<div className="flex flex-wrap items-baseline gap-1">
+								<div className="flex items-start gap-2.5 px-3 py-2.5">
+									<CheckboxRoot
+										checked={config.isSelected}
+										onCheckedChangeAction={() => handleToggleRaid(index)}
+										className="mt-0.5"
+									/>
+									<div className="flex min-w-0 flex-1 flex-col gap-1">
+										<div className="flex items-center gap-1.5">
+											<span className="font-body text-xs font-semibold text-primary">
+												{formatRaidLabel(raid)}
+											</span>
+											{duplicateInfo.isDuplicate && (
+												<TooltipRoot>
+													<TooltipTrigger render={<span />}>
+														<span className="cursor-default font-body text-2xs text-warning">
+															Likely duplicate
+														</span>
+													</TooltipTrigger>
+													<TooltipContent side="top">
+														<span className="font-body text-2xs text-primary">
+															&quot;{duplicateInfo.existingName}&quot; on{" "}
+															{duplicateInfo.existingDate} already exists in
+															this core
+														</span>
+													</TooltipContent>
+												</TooltipRoot>
+											)}
+										</div>
 										<span className="font-body text-2xs text-dimmed">
-											{raid.players
-												.slice(0, 3)
-												.map((p) => p.name)
-												.join(", ")}
+											{formatTimeRange(raid)}
 										</span>
-										{raid.playerCount > 3 && (
-											<TooltipRoot>
-												<TooltipTrigger render={<span />}>
-													<span className="cursor-default font-body text-2xs text-accent">
-														+{raid.playerCount - 3} more
-													</span>
-												</TooltipTrigger>
-												<TooltipContent side="bottom">
-													<div className="max-h-48 overflow-y-auto">
-														{raid.players.map((player) => (
-															<span
-																key={player.name}
-																className="block font-body text-2xs text-primary"
-															>
-																{player.name}
-															</span>
-														))}
-													</div>
-												</TooltipContent>
-											</TooltipRoot>
-										)}
+										<div className="flex flex-wrap items-baseline gap-1">
+											<span className="font-body text-2xs text-dimmed">
+												{raid.players
+													.slice(0, 3)
+													.map((p) => p.name)
+													.join(", ")}
+											</span>
+											{raid.playerCount > 3 && (
+												<TooltipRoot>
+													<TooltipTrigger render={<span />}>
+														<span className="cursor-default font-body text-2xs text-accent">
+															+{raid.playerCount - 3} more
+														</span>
+													</TooltipTrigger>
+													<TooltipContent side="bottom">
+														<div className="max-h-48 overflow-y-auto">
+															{raid.players.map((player) => (
+																<span
+																	key={player.name}
+																	className="block font-body text-2xs text-primary"
+																>
+																	{player.name}
+																</span>
+															))}
+														</div>
+													</TooltipContent>
+												</TooltipRoot>
+											)}
+										</div>
+									</div>
+									<div className="shrink-0">
+										<SelectRoot
+											value={config.coreId}
+											items={coreItems}
+											onValueChangeAction={(value) =>
+												handleCoreChange(index, value)
+											}
+										>
+											<SelectTrigger placeholder="Core" className="w-36" />
+											<SelectPopup>
+												{cores.map((c) => (
+													<SelectItem key={c.id} value={c.id}>
+														{c.name}
+													</SelectItem>
+												))}
+											</SelectPopup>
+										</SelectRoot>
 									</div>
 								</div>
-								<div className="flex shrink-0 items-center gap-1.5">
-									<SelectRoot
-										value={config.coreId}
-										items={coreItems}
-										onValueChangeAction={(value) =>
-											handleCoreChange(index, value)
-										}
-									>
-										<SelectTrigger placeholder="Core" className="w-36" />
-										<SelectPopup>
-											{cores.map((c) => (
-												<SelectItem key={c.id} value={c.id}>
-													{c.name}
-												</SelectItem>
-											))}
-										</SelectPopup>
-									</SelectRoot>
-									{isMismatch && (
-										<AlertTriangle className="size-3 text-warning" />
-									)}
-								</div>
+								{isMismatch && (
+									<Alert
+										variant="warning"
+										message="Low member overlap with selected core"
+										className="border-x-0 border-b-0 text-2xs"
+									/>
+								)}
 							</div>
 						);
 					})}

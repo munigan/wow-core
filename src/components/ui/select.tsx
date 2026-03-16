@@ -52,8 +52,11 @@ export const SelectTrigger = ({
 				className,
 			)}
 		>
-			<BaseSelect.Value placeholder={placeholder} />
-			<BaseSelect.Icon className="flex">
+			<BaseSelect.Value
+				placeholder={placeholder}
+				className="min-w-0 truncate"
+			/>
+			<BaseSelect.Icon className="flex shrink-0">
 				<ChevronDown className="size-3.5 text-dimmed" />
 			</BaseSelect.Icon>
 		</BaseSelect.Trigger>
