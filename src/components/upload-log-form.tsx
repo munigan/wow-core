@@ -1,5 +1,6 @@
 "use client";
 
+import type { DetectedRaid } from "@munigan/wow-combatlog-parser";
 import { AlertTriangle, CheckCircle, FileText, Upload, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -18,15 +19,14 @@ import {
 	TooltipRoot,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { DetectedRaid, ScanMessage } from "@/lib/log-scanner";
+import type { ScanMessage } from "@/lib/scan.worker";
 import { trpc } from "@/lib/trpc/client";
 
 type UploadResult = {
-	raidId: string;
 	raidName: string;
 	raidDate: string;
+	raidInstance: string | null;
 	totalMembers: number;
-	newMembers: number;
 };
 
 type RaidConfig = {
@@ -213,7 +213,10 @@ export function UploadLogForm({
 				for (const core of cores) {
 					const coreMembers = membersByCore.get(core.id) ?? [];
 					if (coreMembers.length === 0) continue;
-					const overlap = computeOverlap(raid.playerNames, coreMembers);
+					const overlap = computeOverlap(
+						raid.players.map((p) => p.name),
+						coreMembers,
+					);
 					if (overlap > bestOverlap) {
 						bestOverlap = overlap;
 						bestCoreId = core.id;
@@ -257,7 +260,7 @@ export function UploadLogForm({
 			setState({ step: "scanning", progress: 0 });
 
 			const worker = new Worker(
-				new URL("../lib/log-scanner.worker.ts", import.meta.url),
+				new URL("../lib/scan.worker.ts", import.meta.url),
 			);
 			workerRef.current = worker;
 
@@ -278,7 +281,9 @@ export function UploadLogForm({
 						worker.terminate();
 						workerRef.current = null;
 
-						if (msg.raids.length === 0) {
+						const { raids } = msg.result;
+
+						if (raids.length === 0) {
 							setState({
 								step: "error",
 								message: "No raids detected in this log file.",
@@ -289,8 +294,8 @@ export function UploadLogForm({
 						const defaultCoreId = activeCoreId ?? cores[0]?.id ?? "";
 						setState({
 							step: "choose",
-							raids: msg.raids,
-							raidConfigs: msg.raids.map(() => ({
+							raids,
+							raidConfigs: raids.map(() => ({
 								isSelected: true,
 								coreId: defaultCoreId,
 							})),
@@ -481,7 +486,10 @@ export function UploadLogForm({
 						if (!config) return null;
 
 						const coreMembers = membersByCore.get(config.coreId) ?? [];
-						const overlap = computeOverlap(raid.playerNames, coreMembers);
+						const overlap = computeOverlap(
+							raid.players.map((p) => p.name),
+							coreMembers,
+						);
 						const isMismatch = overlap < 0.3;
 
 						const duplicateInfo = existingRaidsQuery.data
@@ -529,7 +537,10 @@ export function UploadLogForm({
 									</span>
 									<div className="flex flex-wrap items-center gap-1">
 										<span className="font-body text-2xs text-dimmed">
-											{raid.playerNames.slice(0, 3).join(", ")}
+											{raid.players
+												.slice(0, 3)
+												.map((p) => p.name)
+												.join(", ")}
 										</span>
 										{raid.playerCount > 3 && (
 											<TooltipRoot>
@@ -540,12 +551,12 @@ export function UploadLogForm({
 												</TooltipTrigger>
 												<TooltipContent side="bottom">
 													<div className="max-h-48 overflow-y-auto">
-														{raid.playerNames.map((name) => (
+														{raid.players.map((player) => (
 															<span
-																key={name}
+																key={player.name}
 																className="block font-body text-2xs text-primary"
 															>
-																{name}
+																{player.name}
 															</span>
 														))}
 													</div>
@@ -665,7 +676,7 @@ export function UploadLogForm({
 						);
 						return (
 							<div
-								key={result.raidId}
+								key={`${result.raidName}-${result.raidDate}`}
 								className="flex items-center justify-between border border-border px-3 py-2"
 							>
 								<div className="flex flex-col gap-0.5">
