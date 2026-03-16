@@ -535,7 +535,7 @@ export function UploadLogForm({
 									<span className="font-body text-2xs text-dimmed">
 										{formatTimeRange(raid)}
 									</span>
-									<div className="flex flex-wrap items-center gap-1">
+									<div className="flex flex-wrap items-baseline gap-1">
 										<span className="font-body text-2xs text-dimmed">
 											{raid.players
 												.slice(0, 3)
