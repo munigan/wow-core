@@ -522,7 +522,7 @@ export function UploadLogForm({
 								<div key={group.header} className="flex flex-col gap-3">
 									{/* Date section header */}
 									<div className="flex items-center gap-2">
-										<span className="shrink-0 font-body text-2xs font-bold tracking-wider text-muted">
+										<span className="shrink-0 font-body text-2xs font-bold tracking-wider text-dimmed">
 											{"// "}
 											{group.header}
 										</span>
@@ -579,10 +579,10 @@ export function UploadLogForm({
 																)}
 															</div>
 															<div className="flex items-center gap-2 font-body text-2xs">
-																<span className="text-muted">
+																<span className="text-dimmed">
 																	{formatTimeRange(raid)}
 																</span>
-																<span className="text-muted">·</span>
+																<span className="text-dimmed">·</span>
 																<span className="text-secondary">
 																	{raid.playerCount} members
 																</span>
