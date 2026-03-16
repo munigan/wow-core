@@ -492,7 +492,7 @@ export function UploadLogForm({
 		return (
 			<div className="flex flex-col gap-4">
 				{/* Raid list */}
-				<div className="flex flex-col gap-2.5">
+				<div className="flex max-h-96 flex-col gap-2.5 overflow-y-auto">
 					{raids.map((raid, index) => {
 						const config = raidConfigs[index];
 						if (!config) return null;
