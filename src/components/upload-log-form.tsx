@@ -492,7 +492,7 @@ export function UploadLogForm({
 		return (
 			<div className="flex flex-col gap-4">
 				{/* Raid list */}
-				<div className="flex flex-col gap-1">
+				<div className="flex flex-col gap-2.5">
 					{raids.map((raid, index) => {
 						const config = raidConfigs[index];
 						if (!config) return null;
@@ -582,6 +582,7 @@ export function UploadLogForm({
 										<SelectRoot
 											value={config.coreId}
 											items={coreItems}
+											disabled={!config.isSelected}
 											onValueChangeAction={(value) =>
 												handleCoreChange(index, value)
 											}

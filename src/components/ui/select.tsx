@@ -13,6 +13,7 @@ export type SelectRootProps = {
 	defaultValue?: string;
 	value?: string;
 	items?: SelectOption[];
+	disabled?: boolean;
 	onValueChangeAction?: (value: string | null) => void;
 	children: React.ReactNode;
 };
@@ -21,6 +22,7 @@ export const SelectRoot = ({
 	defaultValue,
 	value,
 	items,
+	disabled,
 	onValueChangeAction,
 	children,
 }: SelectRootProps) => {
@@ -29,6 +31,7 @@ export const SelectRoot = ({
 			defaultValue={defaultValue}
 			value={value}
 			items={items}
+			disabled={disabled}
 			onValueChange={onValueChangeAction}
 		>
 			{children}
@@ -48,7 +51,7 @@ export const SelectTrigger = ({
 	return (
 		<BaseSelect.Trigger
 			className={twMerge(
-				"flex items-center gap-2 border border-border bg-elevated px-3.5 py-2.5 font-body text-xs font-semibold uppercase tracking-wide text-primary outline-none transition-colors hover:border-border-light",
+				"flex items-center gap-2 border border-border bg-elevated px-3.5 py-2.5 font-body text-xs font-semibold uppercase tracking-wide text-primary outline-none transition-colors hover:border-border-light disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border",
 				className,
 			)}
 		>
