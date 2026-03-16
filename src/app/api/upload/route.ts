@@ -1,4 +1,8 @@
-import { parseLog, type RaidSelection } from "@munigan/wow-combatlog-parser";
+import {
+	FileTooLargeError,
+	parseLog,
+	type RaidSelection,
+} from "@munigan/wow-combatlog-parser";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 
@@ -54,6 +58,9 @@ export async function POST(request: Request) {
 
 		return Response.json(results);
 	} catch (error) {
+		if (error instanceof FileTooLargeError) {
+			return Response.json({ error: "File too large" }, { status: 413 });
+		}
 		console.error("Upload error:", error);
 		return Response.json(
 			{ error: "Failed to process log file" },
