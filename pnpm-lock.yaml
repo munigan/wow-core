@@ -14,6 +14,9 @@ importers:
       '@hookform/resolvers':
         specifier: 5.2.2
         version: 5.2.2(react-hook-form@7.71.2(react@19.2.3))
+      '@munigan/wow-combatlog-parser':
+        specifier: 0.1.0
+        version: 0.1.0
       '@tanstack/react-query':
         specifier: 5.90.21
         version: 5.90.21(react@19.2.3)
@@ -726,6 +729,9 @@ packages:
 
   '@mongodb-js/saslprep@1.4.6':
     resolution: {integrity: sha512-y+x3H1xBZd38n10NZF/rEBlvDOOMQ6LKUTHqr8R9VkJ+mmQOYtJFxIlkkK8fZrtOiL6VixbOBWMbZGBdal3Z1g==}
+
+  '@munigan/wow-combatlog-parser@0.1.0':
+    resolution: {integrity: sha512-ubM15Et+lR/+o+T0i+19oFYJq5XuGVdxr25JyAmujGn48sqd5YvUcsTnjgQQ1LLzunjCul2LX+vCUCNBbdW+bQ==}
 
   '@next/env@16.1.6':
     resolution: {integrity: sha512-N1ySLuZjnAtN3kFnwhAwPvZah8RJxKasD7x1f8shFqhncnWZn4JMfg37diLNuoHsLAlrDfM3g4mawVdtAG8XLQ==}
@@ -1883,6 +1889,8 @@ snapshots:
   '@mongodb-js/saslprep@1.4.6':
     dependencies:
       sparse-bitfield: 3.0.3
+
+  '@munigan/wow-combatlog-parser@0.1.0': {}
 
   '@next/env@16.1.6': {}
 
