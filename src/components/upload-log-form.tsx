@@ -9,6 +9,11 @@ import { Button } from "@/components/ui/button";
 import { CheckboxRoot } from "@/components/ui/checkbox";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import {
+	ScrollAreaRoot,
+	ScrollAreaScrollbar,
+	ScrollAreaViewport,
+} from "@/components/ui/scroll-area";
+import {
 	SelectItem,
 	SelectPopup,
 	SelectRoot,
@@ -492,123 +497,128 @@ export function UploadLogForm({
 		return (
 			<div className="flex flex-col gap-4">
 				{/* Raid list */}
-				<div className="flex max-h-96 flex-col gap-2.5 overflow-y-auto">
-					{raids.map((raid, index) => {
-						const config = raidConfigs[index];
-						if (!config) return null;
+				<ScrollAreaRoot>
+					<ScrollAreaViewport className="max-h-96">
+						<div className="flex flex-col gap-2.5">
+							{raids.map((raid, index) => {
+								const config = raidConfigs[index];
+								if (!config) return null;
 
-						const coreMembers = membersByCore.get(config.coreId) ?? [];
-						const overlap = computeOverlap(
-							raid.players.map((p) => p.name),
-							coreMembers,
-						);
-						const isMismatch = overlap < 0.3;
+								const coreMembers = membersByCore.get(config.coreId) ?? [];
+								const overlap = computeOverlap(
+									raid.players.map((p) => p.name),
+									coreMembers,
+								);
+								const isMismatch = overlap < 0.3;
 
-						const duplicateInfo = existingRaidsQuery.data
-							? checkLikelyDuplicate(
-									raid,
-									config.coreId,
-									existingRaidsQuery.data,
-								)
-							: { isDuplicate: false };
+								const duplicateInfo = existingRaidsQuery.data
+									? checkLikelyDuplicate(
+											raid,
+											config.coreId,
+											existingRaidsQuery.data,
+										)
+									: { isDuplicate: false };
 
-						return (
-							<div
-								key={`${raid.startTime}-${raid.endTime}`}
-								className="flex flex-col border border-border"
-							>
-								<div className="flex items-start gap-2.5 px-3 py-2.5">
-									<CheckboxRoot
-										checked={config.isSelected}
-										onCheckedChangeAction={() => handleToggleRaid(index)}
-										className="mt-0.5"
-									/>
-									<div className="flex min-w-0 flex-1 flex-col gap-1">
-										<div className="flex items-center gap-1.5">
-											<span className="font-body text-xs font-semibold text-primary">
-												{formatRaidLabel(raid)}
-											</span>
-											{duplicateInfo.isDuplicate && (
-												<TooltipRoot>
-													<TooltipTrigger render={<span />}>
-														<span className="cursor-default font-body text-2xs text-warning">
-															Likely duplicate
-														</span>
-													</TooltipTrigger>
-													<TooltipContent side="top">
-														<span className="font-body text-2xs text-primary">
-															&quot;{duplicateInfo.existingName}&quot; on{" "}
-															{duplicateInfo.existingDate} already exists in
-															this core
-														</span>
-													</TooltipContent>
-												</TooltipRoot>
-											)}
-										</div>
-										<span className="font-body text-2xs text-dimmed">
-											{formatTimeRange(raid)}
-										</span>
-										<div className="flex flex-wrap items-baseline gap-1">
-											<span className="font-body text-2xs text-dimmed">
-												{raid.players
-													.slice(0, 3)
-													.map((p) => p.name)
-													.join(", ")}
-											</span>
-											{raid.playerCount > 3 && (
-												<TooltipRoot>
-													<TooltipTrigger render={<span />}>
-														<span className="cursor-default font-body text-2xs text-accent">
-															+{raid.playerCount - 3} more
-														</span>
-													</TooltipTrigger>
-													<TooltipContent side="bottom">
-														<div className="max-h-48 overflow-y-auto">
-															{raid.players.map((player) => (
-																<span
-																	key={player.name}
-																	className="block font-body text-2xs text-primary"
-																>
-																	{player.name}
+								return (
+									<div
+										key={`${raid.startTime}-${raid.endTime}`}
+										className="flex flex-col border border-border"
+									>
+										<div className="flex items-start gap-2.5 px-3 py-2.5">
+											<CheckboxRoot
+												checked={config.isSelected}
+												onCheckedChangeAction={() => handleToggleRaid(index)}
+												className="mt-0.5"
+											/>
+											<div className="flex min-w-0 flex-1 flex-col gap-1">
+												<div className="flex items-center gap-1.5">
+													<span className="font-body text-xs font-semibold text-primary">
+														{formatRaidLabel(raid)}
+													</span>
+													{duplicateInfo.isDuplicate && (
+														<TooltipRoot>
+															<TooltipTrigger render={<span />}>
+																<span className="cursor-default font-body text-2xs text-warning">
+																	Likely duplicate
 																</span>
-															))}
-														</div>
-													</TooltipContent>
-												</TooltipRoot>
-											)}
+															</TooltipTrigger>
+															<TooltipContent side="top">
+																<span className="font-body text-2xs text-primary">
+																	&quot;{duplicateInfo.existingName}&quot; on{" "}
+																	{duplicateInfo.existingDate} already exists in
+																	this core
+																</span>
+															</TooltipContent>
+														</TooltipRoot>
+													)}
+												</div>
+												<span className="font-body text-2xs text-dimmed">
+													{formatTimeRange(raid)}
+												</span>
+												<div className="flex flex-wrap items-baseline gap-1">
+													<span className="font-body text-2xs text-dimmed">
+														{raid.players
+															.slice(0, 3)
+															.map((p) => p.name)
+															.join(", ")}
+													</span>
+													{raid.playerCount > 3 && (
+														<TooltipRoot>
+															<TooltipTrigger render={<span />}>
+																<span className="cursor-default font-body text-2xs text-accent">
+																	+{raid.playerCount - 3} more
+																</span>
+															</TooltipTrigger>
+															<TooltipContent side="bottom">
+																<div className="max-h-48 overflow-y-auto">
+																	{raid.players.map((player) => (
+																		<span
+																			key={player.name}
+																			className="block font-body text-2xs text-primary"
+																		>
+																			{player.name}
+																		</span>
+																	))}
+																</div>
+															</TooltipContent>
+														</TooltipRoot>
+													)}
+												</div>
+											</div>
+											<div className="shrink-0">
+												<SelectRoot
+													value={config.coreId}
+													items={coreItems}
+													disabled={!config.isSelected}
+													onValueChangeAction={(value) =>
+														handleCoreChange(index, value)
+													}
+												>
+													<SelectTrigger placeholder="Core" className="w-36" />
+													<SelectPopup>
+														{cores.map((c) => (
+															<SelectItem key={c.id} value={c.id}>
+																{c.name}
+															</SelectItem>
+														))}
+													</SelectPopup>
+												</SelectRoot>
+											</div>
 										</div>
+										{isMismatch && (
+											<Alert
+												variant="warning"
+												message="Low member overlap with selected core"
+												className="border-x-0 border-b-0 text-2xs"
+											/>
+										)}
 									</div>
-									<div className="shrink-0">
-										<SelectRoot
-											value={config.coreId}
-											items={coreItems}
-											disabled={!config.isSelected}
-											onValueChangeAction={(value) =>
-												handleCoreChange(index, value)
-											}
-										>
-											<SelectTrigger placeholder="Core" className="w-36" />
-											<SelectPopup>
-												{cores.map((c) => (
-													<SelectItem key={c.id} value={c.id}>
-														{c.name}
-													</SelectItem>
-												))}
-											</SelectPopup>
-										</SelectRoot>
-									</div>
-								</div>
-								{isMismatch && (
-									<Alert
-										variant="warning"
-										message="Low member overlap with selected core"
-										className="border-x-0 border-b-0 text-2xs"
-									/>
-								)}
-							</div>
-						);
-					})}
-				</div>
+								);
+							})}
+						</div>
+					</ScrollAreaViewport>
+					<ScrollAreaScrollbar />
+				</ScrollAreaRoot>
 
 				{/* Import button */}
 				<Button
