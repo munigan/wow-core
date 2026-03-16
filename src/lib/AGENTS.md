@@ -48,7 +48,8 @@ Use `schema.users` in queries, not bare `users`.
 
 - **Route**: `POST /api/upload` at `src/app/api/upload/route.ts`
 - **Not tRPC**: Raw Next.js route handler for streaming binary upload
-- **Auth**: Validates session + active core via `auth.api.getSession()`
-- **Parser**: `src/lib/log-parser.ts` — `parseLogStream(ReadableStream)` returns `{ raidDate, raidName, players[] }`
-- **Flow**: Stream body -> parse players (0x0E GUID prefix) -> create raid -> upsert members -> insert raidMembers -> return JSON
-- **Response**: `{ raidId, raidName, raidDate, totalMembers, newMembers }`
+- **Auth**: Validates session via `auth.api.getSession()`
+- **Parser**: `@munigan/wow-combatlog-parser` — `parseLog(ReadableStream, RaidSelection[])` returns `ParseResult` with `ParsedRaid[]`
+- **Flow**: Stream body -> `parseLog()` extracts players, encounters, combat stats -> return JSON (no DB writes currently)
+- **Response**: `{ raidName, raidDate, raidInstance, totalMembers }[]`
+- **Scanner**: Client-side `scanLog()` runs in Web Worker (`src/lib/scan.worker.ts`) to detect raids before upload
