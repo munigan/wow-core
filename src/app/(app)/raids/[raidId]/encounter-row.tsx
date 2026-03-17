@@ -45,7 +45,7 @@ export function EncounterRow({
 		<>
 			<button
 				type="button"
-				className={`flex w-full items-center border-b px-4 py-3 text-left font-body text-sm transition-colors hover:bg-subtle ${isSelected ? "border-accent/30 bg-accent-10" : "border-elevated"}`}
+				className={`flex w-full items-center border-b border-elevated px-4 py-3 text-left font-body text-sm transition-colors hover:bg-subtle ${isSelected ? "bg-accent-10" : ""}`}
 				onClick={() => {
 					onSelect();
 					if (hasWipes) setIsExpanded((prev) => !prev);

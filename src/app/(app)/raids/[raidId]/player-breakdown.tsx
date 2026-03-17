@@ -63,6 +63,14 @@ function getRole(spec: string | null): string {
 	return SPEC_ROLES[spec] ?? "dps";
 }
 
+function formatSpec(spec: string | null, playerClass: string | null): string | null {
+	if (!spec || !playerClass) return null;
+	const classPrefix = playerClass === "death-knight" ? "death-knight-" : `${playerClass}-`;
+	if (!spec.startsWith(classPrefix)) return null;
+	const specName = spec.slice(classPrefix.length);
+	return specName.charAt(0).toUpperCase() + specName.slice(1);
+}
+
 type PlayerBreakdownProps = {
 	encounterId: string;
 	formatNumber: (n: number) => string;
@@ -171,6 +179,11 @@ export function PlayerBreakdown({
 								className={`capitalize ${CLASS_COLORS[player.class ?? ""] ?? "text-secondary"}`}
 							>
 								{player.class ?? "Unknown"}
+								{formatSpec(player.spec, player.class) && (
+									<span className="text-dimmed">
+										{" "}({formatSpec(player.spec, player.class)})
+									</span>
+								)}
 							</span>
 						</div>
 						<div className="flex-1 font-semibold text-accent">
