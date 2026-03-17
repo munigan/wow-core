@@ -150,11 +150,11 @@ export function PlayerBreakdown({
 				{/* Header */}
 				<div className="flex border-b border-border px-4 py-2.5 font-body text-2xs uppercase tracking-wider text-secondary">
 					<div className="w-8">#</div>
-					<div className="flex-[3]">Player</div>
-					<div className="flex-[2]">Class</div>
+					<div className="flex-1">Player</div>
+					<div className="flex-1">Class</div>
 					<div className="flex-1">DPS</div>
 					<div className="flex-1">Damage</div>
-					<div className="w-16">Deaths</div>
+					<div className="flex-1">Deaths</div>
 				</div>
 				{/* Rows */}
 				{filteredPlayers.map((player, idx) => (
@@ -163,10 +163,10 @@ export function PlayerBreakdown({
 						className="flex items-center border-b border-elevated px-4 py-2.5 font-body text-sm"
 					>
 						<div className="w-8 text-dimmed">{idx + 1}</div>
-						<div className="flex-[3] text-primary">
+						<div className="flex-1 text-primary">
 							{player.playerName}
 						</div>
-						<div className="flex flex-[2] items-center gap-1.5 whitespace-nowrap">
+						<div className="flex flex-1 items-center gap-1.5 whitespace-nowrap">
 							{player.class && CLASS_ICONS[player.class] && (
 								<Image
 									src={CLASS_ICONS[player.class]}
@@ -194,7 +194,7 @@ export function PlayerBreakdown({
 						</div>
 						<div
 							data-has-deaths={player.deathCount > 0 || undefined}
-							className="w-16 text-dimmed data-has-deaths:text-danger"
+							className="flex-1 text-dimmed data-has-deaths:text-danger"
 						>
 							{player.deathCount}
 						</div>
