@@ -1,0 +1,24 @@
+import { Skeleton } from "@/components/ui/skeleton";
+
+export default function MembersLoading() {
+	return (
+		<div className="flex flex-col gap-8 p-8">
+			<div className="flex flex-col gap-1">
+				<Skeleton className="h-10 w-48" />
+				<Skeleton className="h-4 w-80" />
+			</div>
+			<div className="flex flex-col gap-4">
+				<div className="flex items-center gap-2">
+					<Skeleton className="h-8 w-40" />
+					<Skeleton className="h-8 w-48" />
+				</div>
+				<div className="border border-border">
+					<Skeleton className="h-10 w-full" />
+					{Array.from({ length: 8 }).map((_, i) => (
+						<Skeleton key={i} className="h-12 w-full border-t border-border" />
+					))}
+				</div>
+			</div>
+		</div>
+	);
+}

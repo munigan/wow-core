@@ -6,6 +6,7 @@ import {
 	FileTooLargeError,
 	parseLog,
 } from "@munigan/wow-combatlog-parser";
+import { sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -14,6 +15,7 @@ import { consumableUses } from "@/lib/db/schema/consumable-uses";
 import { encounterPlayers } from "@/lib/db/schema/encounter-players";
 import { encounters } from "@/lib/db/schema/encounters";
 import { externalBuffs } from "@/lib/db/schema/external-buffs";
+import { members } from "@/lib/db/schema/members";
 import { playerDeaths } from "@/lib/db/schema/player-deaths";
 import { raids } from "@/lib/db/schema/raids";
 
@@ -45,6 +47,28 @@ async function saveRaidToDb(
 			durationMs: parsedRaid.raidDurationMs,
 		})
 		.returning({ id: raids.id });
+
+	// Upsert members from raid players
+	if (parsedRaid.players.length > 0) {
+		await tx
+			.insert(members)
+			.values(
+				parsedRaid.players.map((p) => ({
+					coreId: selectedRaid.coreId,
+					name: p.name,
+					class: p.class,
+					spec: p.spec,
+				})),
+			)
+			.onConflictDoUpdate({
+				target: [members.coreId, members.name],
+				set: {
+					class: sql`excluded.class`,
+					spec: sql`excluded.spec`,
+					updatedAt: sql`now()`,
+				},
+			});
+	}
 
 	for (let i = 0; i < parsedRaid.encounters.length; i++) {
 		const enc = parsedRaid.encounters[i];
