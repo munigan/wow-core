@@ -147,59 +147,63 @@ export function PlayerBreakdown({
 			</div>
 
 			<div className="overflow-hidden border border-border bg-card">
-				{/* Header */}
-				<div className="flex border-b border-border px-4 py-2.5 font-body text-2xs uppercase tracking-wider text-secondary">
-					<div className="w-8">#</div>
-					<div className="flex-1">Player</div>
-					<div className="flex-1">Class</div>
-					<div className="flex-1">DPS</div>
-					<div className="flex-1">Damage</div>
-					<div className="flex-1">Deaths</div>
-				</div>
-				{/* Rows */}
-				{filteredPlayers.map((player, idx) => (
-					<div
-						key={player.id}
-						className="flex items-center border-b border-elevated px-4 py-2.5 font-body text-sm"
-					>
-						<div className="w-8 text-dimmed">{idx + 1}</div>
-						<div className="flex-1 text-primary">
-							{player.playerName}
-						</div>
-						<div className="flex flex-1 items-center gap-1.5 whitespace-nowrap">
-							{player.class && CLASS_ICONS[player.class] && (
-								<Image
-									src={CLASS_ICONS[player.class]}
-									alt={player.class}
-									width={16}
-									height={16}
-								/>
-							)}
-							<span
-								className={`capitalize ${CLASS_COLORS[player.class ?? ""] ?? "text-secondary"}`}
+				<table className="w-full font-body">
+					<thead>
+						<tr className="border-b border-border text-2xs uppercase tracking-wider text-secondary">
+							<th className="w-10 py-2.5 pl-4 text-left font-normal">#</th>
+							<th className="py-2.5 text-left font-normal">Player</th>
+							<th className="py-2.5 text-left font-normal">Class</th>
+							<th className="w-20 py-2.5 text-left font-normal">DPS</th>
+							<th className="w-20 py-2.5 text-left font-normal">Damage</th>
+							<th className="w-16 py-2.5 pr-4 text-left font-normal">Deaths</th>
+						</tr>
+					</thead>
+					<tbody className="text-sm">
+						{filteredPlayers.map((player, idx) => (
+							<tr
+								key={player.id}
+								className="border-b border-elevated"
 							>
-								{player.class ?? "Unknown"}
-								{formatSpec(player.spec, player.class) && (
-									<span className="text-dimmed">
-										{" "}({formatSpec(player.spec, player.class)})
+								<td className="py-2.5 pl-4 text-dimmed">{idx + 1}</td>
+								<td className="py-2.5 text-primary">{player.playerName}</td>
+								<td className="py-2.5">
+									<span className="flex items-center gap-1.5 whitespace-nowrap">
+										{player.class && CLASS_ICONS[player.class] && (
+											<Image
+												src={CLASS_ICONS[player.class]}
+												alt={player.class}
+												width={16}
+												height={16}
+											/>
+										)}
+										<span
+											className={`capitalize ${CLASS_COLORS[player.class ?? ""] ?? "text-secondary"}`}
+										>
+											{player.class ?? "Unknown"}
+											{formatSpec(player.spec, player.class) && (
+												<span className="text-dimmed">
+													{" "}({formatSpec(player.spec, player.class)})
+												</span>
+											)}
+										</span>
 									</span>
-								)}
-							</span>
-						</div>
-						<div className="flex-1 font-semibold text-accent">
-							{formatNumber(player.dps)}
-						</div>
-						<div className="flex-1 text-secondary">
-							{formatNumber(player.damage)}
-						</div>
-						<div
-							data-has-deaths={player.deathCount > 0 || undefined}
-							className="flex-1 text-dimmed data-has-deaths:text-danger"
-						>
-							{player.deathCount}
-						</div>
-					</div>
-				))}
+								</td>
+								<td className="py-2.5 font-semibold text-accent">
+									{formatNumber(player.dps)}
+								</td>
+								<td className="py-2.5 text-secondary">
+									{formatNumber(player.damage)}
+								</td>
+								<td
+									data-has-deaths={player.deathCount > 0 || undefined}
+									className="py-2.5 pr-4 text-dimmed data-has-deaths:text-danger"
+								>
+									{player.deathCount}
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
 				{filteredPlayers.length === 0 && (
 					<div className="px-4 py-6 text-center font-body text-sm text-dimmed">
 						No players match the selected filters.
