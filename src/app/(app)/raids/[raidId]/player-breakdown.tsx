@@ -1,7 +1,31 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState } from "react";
+import dkIcon from "@/assets/classes/dk.png";
+import druidIcon from "@/assets/classes/druid.png";
+import hunterIcon from "@/assets/classes/hunter.png";
+import mageIcon from "@/assets/classes/mage.png";
+import paladinIcon from "@/assets/classes/paladin.png";
+import priestIcon from "@/assets/classes/priest.png";
+import rogueIcon from "@/assets/classes/rogue.png";
+import shamanIcon from "@/assets/classes/shaman.png";
+import warlockIcon from "@/assets/classes/warlock.png";
+import warriorIcon from "@/assets/classes/warrior.png";
 import { trpc } from "@/lib/trpc/client";
+
+const CLASS_ICONS: Record<string, typeof dkIcon> = {
+	warrior: warriorIcon,
+	paladin: paladinIcon,
+	hunter: hunterIcon,
+	rogue: rogueIcon,
+	priest: priestIcon,
+	"death-knight": dkIcon,
+	shaman: shamanIcon,
+	mage: mageIcon,
+	warlock: warlockIcon,
+	druid: druidIcon,
+};
 
 const CLASS_COLORS: Record<string, string> = {
 	warrior: "text-class-warrior",
@@ -124,7 +148,15 @@ export function PlayerBreakdown({
 						<div className="flex-[2] text-primary">
 							{player.playerName}
 						</div>
-						<div className="flex-1">
+						<div className="flex flex-1 items-center gap-1.5">
+							{player.class && CLASS_ICONS[player.class] && (
+								<Image
+									src={CLASS_ICONS[player.class]}
+									alt={player.class}
+									width={16}
+									height={16}
+								/>
+							)}
 							<span
 								className={`capitalize ${CLASS_COLORS[player.class ?? ""] ?? "text-secondary"}`}
 							>
