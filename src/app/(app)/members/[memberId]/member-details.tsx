@@ -249,6 +249,7 @@ export function MemberDetails({ memberId }: MemberDetailsProps) {
 					// DPS Trend — Last 8 Weeks
 				</span>
 				{chartData.length > 0 ? (
+				<div className="border border-border bg-card p-4">
 					<AreaChart
 						data={chartData}
 						color="var(--color-accent)"
@@ -269,6 +270,7 @@ export function MemberDetails({ memberId }: MemberDetailsProps) {
 							</div>
 						)}
 					/>
+				</div>
 				) : (
 					<div className="flex h-70 items-center justify-center border border-border bg-card">
 						<span className="font-body text-sm text-dimmed">
