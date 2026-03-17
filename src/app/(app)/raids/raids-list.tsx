@@ -172,7 +172,7 @@ export function RaidsList() {
 									<tr>
 										<td
 											colSpan={6}
-											className="bg-page py-2 pl-4 font-body text-xs uppercase tracking-wider text-secondary"
+											className="border-b border-elevated bg-page py-2 pl-4 font-body text-xs uppercase tracking-wider text-secondary"
 										>
 											{dateLabel}
 										</td>
