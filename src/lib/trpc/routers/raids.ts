@@ -314,15 +314,19 @@ export const raidsRouter = createTRPCRouter({
 				.from(consumableUses)
 				.where(eq(consumableUses.encounterId, input.encounterId));
 
-			const consumableMap = new Map<
-				string,
-				{ totalPots: number; hasPrePot: boolean; totalEngi: number }
-			>();
+			type ConsumableAgg = {
+				totalPots: number;
+				hasPrePot: boolean;
+				totalEngi: number;
+				items: { spellName: string; count: number; type: string }[];
+			};
+			const consumableMap = new Map<string, ConsumableAgg>();
 			for (const c of consumables) {
 				const existing = consumableMap.get(c.playerGuid) ?? {
 					totalPots: 0,
 					hasPrePot: false,
 					totalEngi: 0,
+					items: [],
 				};
 				if (c.type === "potion" || c.type === "mana_potion") {
 					existing.totalPots += c.count;
@@ -330,6 +334,11 @@ export const raidsRouter = createTRPCRouter({
 				} else if (c.type === "engineering") {
 					existing.totalEngi += c.count;
 				}
+				existing.items.push({
+					spellName: c.spellName,
+					count: c.count,
+					type: c.type,
+				});
 				consumableMap.set(c.playerGuid, existing);
 			}
 
@@ -351,6 +360,7 @@ export const raidsRouter = createTRPCRouter({
 						totalPots: cons?.totalPots ?? 0,
 						hasPrePot: cons?.hasPrePot ?? false,
 						totalEngi: cons?.totalEngi ?? 0,
+						consumableItems: cons?.items ?? [],
 					};
 				})
 				.sort((a, b) => b.dps - a.dps);

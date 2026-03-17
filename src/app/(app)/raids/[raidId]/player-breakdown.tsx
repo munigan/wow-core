@@ -2,8 +2,15 @@
 
 import Image from "next/image";
 import { keepPreviousData } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { parseAsString, useQueryState } from "nuqs";
+import { useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+	TooltipContent,
+	TooltipLabel,
+	TooltipRoot,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
 	SelectItem,
 	SelectPopup,
@@ -99,11 +106,18 @@ export function PlayerBreakdown({
 	encounters,
 	formatNumber,
 }: PlayerBreakdownProps) {
-	const [selectedEncounterId, setSelectedEncounterId] = useState<string>(
-		encounters[0]?.id ?? "",
+	const [selectedEncounterId, setSelectedEncounterId] = useQueryState(
+		"encounter",
+		parseAsString.withDefault(encounters[0]?.id ?? ""),
 	);
-	const [roleFilter, setRoleFilter] = useState<string>("all");
-	const [classFilter, setClassFilter] = useState<string>("all");
+	const [roleFilter, setRoleFilter] = useQueryState(
+		"role",
+		parseAsString.withDefault("all"),
+	);
+	const [classFilter, setClassFilter] = useQueryState(
+		"class",
+		parseAsString.withDefault("all"),
+	);
 
 	const { data, isLoading } = trpc.raids.getEncounterDetails.useQuery(
 		{ encounterId: selectedEncounterId },
@@ -281,17 +295,70 @@ export function PlayerBreakdown({
 									data-has-value={player.totalPots > 0 || undefined}
 									className="py-2.5 text-dimmed data-has-value:text-primary data-has-prepot:text-accent"
 								>
-									{player.totalPots > 0
-										? player.hasPrePot
-											? `${player.totalPots} (PP)`
-											: player.totalPots
-										: "0"}
+									{(() => {
+										const potItems = player.consumableItems.filter(
+											(c) => c.type === "potion" || c.type === "mana_potion" || c.type === "flame_cap",
+										);
+										const label = player.totalPots > 0
+											? player.hasPrePot
+												? `${player.totalPots} (PP)`
+												: String(player.totalPots)
+											: "0";
+										if (potItems.length === 0) return label;
+										return (
+											<TooltipRoot>
+												<TooltipTrigger render={<span />}>
+													<span className="cursor-default underline decoration-dashed decoration-dimmed underline-offset-4 hover:decoration-secondary">{label}</span>
+												</TooltipTrigger>
+												<TooltipContent side="top">
+													<TooltipLabel>Consumables</TooltipLabel>
+													<div className="flex flex-col gap-1">
+														{potItems.map((item) => (
+															<div
+																key={item.spellName}
+																className="flex items-center justify-between gap-6 font-body text-xs"
+															>
+																<span className="text-accent">{item.spellName}</span>
+																<span className="text-secondary">x{item.count}</span>
+															</div>
+														))}
+													</div>
+												</TooltipContent>
+											</TooltipRoot>
+										);
+									})()}
 								</td>
 								<td
 									data-has-value={player.totalEngi > 0 || undefined}
 									className="py-2.5 pr-4 text-dimmed data-has-value:text-primary"
 								>
-									{player.totalEngi}
+									{(() => {
+										const engiItems = player.consumableItems.filter(
+											(c) => c.type === "engineering",
+										);
+										if (engiItems.length === 0) return player.totalEngi;
+										return (
+											<TooltipRoot>
+												<TooltipTrigger render={<span />}>
+													<span className="cursor-default underline decoration-dashed decoration-dimmed underline-offset-4 hover:decoration-secondary">{player.totalEngi}</span>
+												</TooltipTrigger>
+												<TooltipContent side="top">
+													<TooltipLabel>Consumables</TooltipLabel>
+													<div className="flex flex-col gap-1">
+														{engiItems.map((item) => (
+															<div
+																key={item.spellName}
+																className="flex items-center justify-between gap-6 font-body text-xs"
+															>
+																<span className="text-accent">{item.spellName}</span>
+																<span className="text-secondary">x{item.count}</span>
+															</div>
+														))}
+													</div>
+												</TooltipContent>
+											</TooltipRoot>
+										);
+									})()}
 								</td>
 							</tr>
 						))}
