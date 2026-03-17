@@ -4,6 +4,8 @@
 
 Enhance the existing member detail page (currently showing only a consumable usage table) with performance metrics, trend visualization, and a compact consumable compliance heatmap. Focus areas: **Performance** (DPS trends) and **Preparedness** (consumable compliance).
 
+The existing consumable usage table is **removed** and replaced by the heatmap in Section 3.
+
 ## Layout
 
 Single scrollable page with vertical sections:
@@ -13,18 +15,20 @@ Single scrollable page with vertical sections:
 3. DPS Trend Chart
 4. Consumable Compliance Heatmap
 
+**Responsive:** Stat cards row uses a 2x2 grid on mobile (`< md`), 4 columns on desktop.
+
 ---
 
 ## Section 1: Stat Cards Row
 
-Four cards in a horizontal row below the member header (name, class icon, spec).
+Four cards in a horizontal row below the member header (name, class icon, spec). **All metrics are scoped to the last 8 weeks** for consistency with the chart and heatmap.
 
 | Card | Label | Data Source | Format |
 |------|-------|-------------|--------|
-| Avg DPS | `AVG DPS` | `encounterPlayers.damage` / encounter `durationMs`, averaged across all encounters for this member | Number formatted with commas, e.g. "8,421" |
-| Raid Attendance | `RAIDS ATTENDED` | Count of distinct `raidMembers` rows for this member | Integer |
-| Pre-pot Rate | `PRE-POT RATE` | Encounters with at least one `consumableUses.prePot = true` / total encounters | Percentage, e.g. "87%" |
-| Total Deaths | `TOTAL DEATHS` | Count of `playerDeaths` rows for this member (last 8 weeks) | Integer |
+| Avg DPS | `AVG DPS` | `encounterPlayers.damage` / encounter `durationMs`, averaged across all encounters (8 weeks) | Number formatted with commas, e.g. "8,421" |
+| Raid Attendance | `RAIDS ATTENDED` | Count of distinct raids via `raidMembers` (8 weeks) | Integer |
+| Pre-pot Rate | `PRE-POT RATE` | Encounters where player has at least one `consumableUses.prePot = true` / total encounters player participated in (8 weeks) | Percentage, e.g. "87%" |
+| Total Deaths | `TOTAL DEATHS` | Count of `playerDeaths` rows (8 weeks) | Integer |
 
 ### Color logic
 
@@ -37,6 +41,14 @@ Four cards in a horizontal row below the member header (name, class icon, spec).
 
 Uses the existing `Card` component. Number displayed in `font-heading` large text with conditional color via `data-*` attributes. Label in small uppercase `font-body` secondary text.
 
+### Loading skeleton
+
+Four skeleton cards matching the card dimensions — a large rectangular pulse for the number, a smaller one for the label.
+
+### Empty state
+
+If the member has no encounters in the last 8 weeks, show all cards with "—" in secondary text.
+
 ---
 
 ## Section 2: DPS Trend Chart
@@ -48,13 +60,21 @@ Built with Recharts (consistent with shadcn charts). Designed as a generic, reus
 ### Component API
 
 ```tsx
+type AreaChartDataPoint<T = Record<string, unknown>> = {
+  label: string
+  value: number
+  meta?: T
+}
+
 <AreaChart
-  data={[{ label: "Mar 10", value: 8421 }, ...]}
+  data={[{ label: "Mar 10", value: 8421, meta: { encounters: 10 } }, ...]}
   color="var(--color-accent)"
-  tooltipFormatter={(point) => ReactNode}
+  tooltipFormatter={(point: AreaChartDataPoint) => ReactNode}
   height={280}
 />
 ```
+
+The `meta` field allows passing arbitrary data (e.g., encounter count) to the tooltip formatter without coupling the chart to specific data shapes.
 
 ### Data
 
@@ -74,7 +94,15 @@ Built with Recharts (consistent with shadcn charts). Designed as a generic, reus
 
 ### Section header
 
-`// DPS TREND — LAST 8 WEEKS` — uppercase monospace with `//` prefix, matching existing design file patterns.
+`// DPS TREND — LAST 8 WEEKS` — uses `font-body text-xs uppercase tracking-wider text-secondary` (matching existing section label pattern in the codebase). The `//` prefix is part of the text content.
+
+### Loading skeleton
+
+A rectangular skeleton matching the chart height (280px).
+
+### Empty state
+
+If no DPS data exists, show a centered message: "No encounter data in the last 8 weeks" in secondary text within the chart area.
 
 ---
 
@@ -87,20 +115,28 @@ A generic heatmap grid component reusable for any grid-based visualization.
 ### Component API
 
 ```tsx
+type HeatmapCellStatus = "full" | "partial" | "empty"
+
+type HeatmapCell = {
+  value?: number
+  display?: string  // overrides value for rendering (e.g. "8/10")
+  status: HeatmapCellStatus
+}
+
+type HeatmapRow = {
+  label: string
+  badge?: string
+  cells: HeatmapCell[]
+}
+
 <HeatmapGrid
-  rows={[{
-    label: "Mar 10",
-    badge: "10 encounters",
-    cells: [
-      { value: 98.5, status: "full" },
-      { value: 72, status: "partial" },
-      { display: "8/10", status: "full" },
-    ]
-  }]}
+  rows={rows}
   columns={["Flask", "Food", "Consumables"]}
-  tooltipFormatter={(row, col, cell) => ReactNode}
+  tooltipFormatter={(row: HeatmapRow, colIndex: number, cell: HeatmapCell) => ReactNode}
 />
 ```
+
+Cell rendering: if `display` is provided, render it as-is. Otherwise render `value` (formatted as a number). Color is determined by `status`: `data-full` (accent green), `data-partial` (warning orange), `data-empty` (danger red or dimmed gray for no data).
 
 ### Layout
 
@@ -118,8 +154,8 @@ A generic heatmap grid component reusable for any grid-based visualization.
 
 ### Consumables column details
 
-- Denominator: number of encounters on that date
-- Numerator: encounters where the player used at least one consumable (potions + pre-pots count individually)
+- Denominator: number of encounters the player participated in on that date
+- Numerator: encounters where the player used at least one consumable (types: `potion`, `mana_potion`, `flame_cap`, `engineering` — all count toward coverage)
 - Color determined by encounter coverage: did the player use at least one consumable on each boss?
 
 ### Tooltip on hover
@@ -131,21 +167,39 @@ All columns show:
 
 ### Section header
 
-`// CONSUMABLE COMPLIANCE` — same `//` prefix pattern.
+`// CONSUMABLE COMPLIANCE` — same styling as Section 2 header.
+
+### Loading skeleton
+
+A grid-shaped skeleton matching the expected row/column layout.
+
+### Empty state
+
+If no consumable data exists, show a centered message: "No consumable data in the last 8 weeks" in secondary text.
 
 ---
 
 ## Data Requirements
 
+### Member-to-encounter join strategy
+
+The combat data tables (`encounterPlayers`, `consumableUses`, `buffUptimes`, `playerDeaths`) do not have a `memberId` foreign key. They use `playerGuid` and `playerName`. The join strategy (matching the existing `getById` implementation) is:
+
+1. Find all `encounterPlayers` rows matching `member.name` within the core's raids (join `encounters` → `raids` → filter by `coreId`)
+2. Collect the `playerGuid` values from step 1
+3. Use those `playerGuid` values to query `consumableUses`, `buffUptimes`, and `playerDeaths` (scoped to the same encounters)
+
+This ensures correct scoping to the core and handles potential name collisions across different cores.
+
 ### Updated tRPC query: `members.getById`
 
-The existing query returns member info + raid consumable data. It needs to additionally return:
+Extend the existing `getById` query to return the additional aggregated data. Do **not** add a second query — this avoids a client-side waterfall. The data should come pre-grouped by date from the server.
 
-**For stat cards:**
-- Average DPS across all encounters (compute from `encounterPlayers.damage` / `encounters.durationMs`)
-- Raid attendance count (count distinct raids from `raidMembers`)
-- Pre-pot rate (encounters with prePot / total encounters from `consumableUses`)
-- Death count from `playerDeaths` (last 8 weeks)
+**For stat cards (all scoped to last 8 weeks):**
+- Average DPS: compute from `encounterPlayers.damage` / `encounters.durationMs`, averaged across all encounters
+- Raid attendance: count distinct raids from `raidMembers`
+- Pre-pot rate: count encounters with at least one `consumableUses.prePot = true` / total encounters the player participated in
+- Death count: count from `playerDeaths`
 
 **For DPS trend chart:**
 - Per-date average DPS: group `encounterPlayers` by `raids.date` (truncated to date), compute avg DPS per date
@@ -156,10 +210,6 @@ The existing query returns member info + raid consumable data. It needs to addit
 - Flask/food average uptimes per date from `buffUptimes`
 - Per-encounter consumable details from `consumableUses` (for tooltip breakdown and coverage calculation)
 
-### Query structure recommendation
-
-Keep the existing query for basic member info. Add a second query or extend the existing one to return the new aggregated data. The data should come pre-grouped by date from the server to avoid client-side aggregation of large datasets.
-
 ---
 
 ## New Reusable UI Components
@@ -167,14 +217,15 @@ Keep the existing query for basic member info. Add a second query or extend the 
 ### `src/components/ui/area-chart.tsx`
 
 - Generic area chart built on Recharts
-- Props: `data` (label/value pairs), `color`, `height`, `tooltipFormatter`
+- Props: `data` (array of `{ label, value, meta? }`), `color`, `height`, `tooltipFormatter`
 - Handles: ResponsiveContainer, gradient fill, dark theme axis styling, dot hover states
 - No external dependencies beyond Recharts
 
 ### `src/components/ui/heatmap-grid.tsx`
 
 - Generic heatmap grid
-- Props: `rows` (label, badge, cells array), `columns` (header labels), `tooltipFormatter`
+- Props: `rows` (array of `{ label, badge?, cells }`), `columns` (header labels), `tooltipFormatter`
+- Cell type: `{ value?, display?, status: "full" | "partial" | "empty" }`
 - Handles: grid layout, cell color via `data-*` attributes, tooltip integration
 - Uses existing Tooltip component from the UI library
 
