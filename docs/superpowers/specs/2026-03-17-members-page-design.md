@@ -29,7 +29,7 @@ New `members.listWithStats` tRPC procedure:
 - Fetches all members for the active core
 - For each member, counts distinct raids attended by joining: encounters → encounter_players where `encounter_players.playerName = members.name`, then counting distinct `encounters.raidId`
 - Accepts optional `class` and `search` string inputs for server-side filtering
-- Returns: member fields + `raidCount` + latest `spec` from encounter_players
+- Returns: member fields + `raidCount` + latest `spec` from encounter_players (determined by the most recent `raids.date` for raids the member participated in)
 
 ### Empty states
 - No members at all: "No members yet. Upload a combat log to populate the roster."
@@ -75,6 +75,8 @@ New `members.getById` tRPC procedure:
 
 ### Member-to-encounter linking
 Members are linked to encounter data by **name** (not GUID). The `members` table stores `name` and `encounter_players` stores `playerName`. A player's GUID can change across raids but their character name stays consistent within a core.
+
+**Join chain for consumable/buff data:** `members.name → encounter_players.playerName` gives matching rows with `playerGuid` per encounter. Then use that `playerGuid + encounterId` to look up `buff_uptimes` and `consumable_uses`. The GUID lookup must be scoped per-encounter since GUIDs can change between raids.
 
 ### Loading
 - `loading.tsx` with skeleton for header + table
