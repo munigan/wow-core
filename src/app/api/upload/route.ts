@@ -6,7 +6,7 @@ import {
 	FileTooLargeError,
 	parseLog,
 } from "@munigan/wow-combatlog-parser";
-import { sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -36,6 +36,32 @@ async function saveRaidToDb(
 	const playerMap = new Map(
 		parsedRaid.players.map((p) => [p.guid, p]),
 	);
+
+	// Skip if raid with same core + date + instance already exists
+	const [existingRaid] = await tx
+		.select({ id: raids.id })
+		.from(raids)
+		.where(
+			and(
+				eq(raids.coreId, selectedRaid.coreId),
+				eq(raids.date, parsedRaid.raidDate),
+				parsedRaid.raidInstance
+					? eq(raids.raidInstance, parsedRaid.raidInstance)
+					: isNull(raids.raidInstance),
+			),
+		)
+		.limit(1);
+
+	if (existingRaid) {
+		return {
+			raidId: existingRaid.id,
+			raidName: selectedRaid.raidName,
+			raidDate: parsedRaid.raidDate.toISOString(),
+			raidInstance: parsedRaid.raidInstance,
+			totalMembers: parsedRaid.players.length,
+			isDuplicate: true,
+		};
+	}
 
 	const [raidRow] = await tx
 		.insert(raids)
