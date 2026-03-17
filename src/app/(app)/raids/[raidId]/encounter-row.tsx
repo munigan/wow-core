@@ -45,7 +45,8 @@ export function EncounterRow({
 		<>
 			<button
 				type="button"
-				className={`flex w-full items-center border-b border-elevated px-4 py-3 text-left font-body text-sm transition-colors hover:bg-subtle ${isSelected ? "bg-accent-10" : ""}`}
+				data-selected={isSelected || undefined}
+				className="flex w-full items-center border-b border-elevated px-4 py-3 text-left font-body text-sm transition-colors hover:bg-subtle data-selected:bg-accent-10"
 				onClick={() => {
 					onSelect();
 					if (hasWipes) setIsExpanded((prev) => !prev);
@@ -75,7 +76,8 @@ export function EncounterRow({
 					{formatEncounterDuration(encounter.durationMs)}
 				</div>
 				<div
-					className={`flex-1 ${encounter.deathCount > 0 ? "text-danger" : "text-dimmed"}`}
+					data-has-deaths={encounter.deathCount > 0 || undefined}
+					className="flex-1 text-dimmed data-has-deaths:text-danger"
 				>
 					{encounter.deathCount}
 				</div>
@@ -99,7 +101,8 @@ export function EncounterRow({
 							{formatEncounterDuration(wipe.durationMs)}
 						</div>
 						<div
-							className={`flex-1 ${wipe.deathCount > 0 ? "text-danger" : "text-dimmed"}`}
+							data-has-deaths={wipe.deathCount > 0 || undefined}
+							className="flex-1 text-dimmed data-has-deaths:text-danger"
 						>
 							{wipe.deathCount}
 						</div>

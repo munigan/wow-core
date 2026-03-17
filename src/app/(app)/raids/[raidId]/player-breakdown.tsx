@@ -193,7 +193,8 @@ export function PlayerBreakdown({
 							{formatNumber(player.damage)}
 						</div>
 						<div
-							className={`w-16 ${player.deathCount > 0 ? "text-danger" : "text-dimmed"}`}
+							data-has-deaths={player.deathCount > 0 || undefined}
+							className="w-16 text-dimmed data-has-deaths:text-danger"
 						>
 							{player.deathCount}
 						</div>
