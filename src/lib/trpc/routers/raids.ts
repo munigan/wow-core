@@ -129,7 +129,7 @@ export const raidsRouter = createTRPCRouter({
 
 			return {
 				...raid,
-				uniquePlayerCount: playerCountResult?.uniquePlayers ?? 0,
+				uniquePlayerCount: Number(playerCountResult?.uniquePlayers ?? 0),
 				encounters: encountersWithStats,
 			};
 		}),

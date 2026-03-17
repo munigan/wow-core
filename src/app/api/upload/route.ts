@@ -188,6 +188,18 @@ export async function POST(request: Request) {
 		const selectedRaids: SelectedRaidPayload[] =
 			JSON.parse(selectedRaidsHeader);
 
+		// Verify all selected raids target the user's active core
+		const activeCoreId = session.session.activeOrganizationId;
+		const hasInvalidCore = selectedRaids.some(
+			(r) => r.coreId !== activeCoreId,
+		);
+		if (!activeCoreId || hasInvalidCore) {
+			return Response.json(
+				{ error: "Invalid core selection" },
+				{ status: 403 },
+			);
+		}
+
 		const raidSelections: RaidSelection[] = selectedRaids.map((r) => ({
 			dates: r.dates,
 			startTime: r.startTime,
