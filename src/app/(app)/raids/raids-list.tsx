@@ -113,7 +113,7 @@ export function RaidsList() {
 					</SelectPopup>
 				</SelectRoot>
 
-				<div className="flex">
+				<div className="flex -space-x-px">
 					{DATE_RANGES.map((range) => (
 						<button
 							key={range}
