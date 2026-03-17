@@ -23,6 +23,7 @@ import type { ScanMessage } from "@/lib/scan.worker";
 import { trpc } from "@/lib/trpc/client";
 
 type UploadResult = {
+	raidId: string;
 	raidName: string;
 	raidDate: string;
 	raidInstance: string | null;
@@ -427,7 +428,7 @@ export function UploadLogForm({
 
 	const handleDone = () => {
 		onDoneAction();
-		router.refresh();
+		router.push("/raids");
 	};
 
 	const handleDrop = useCallback(
