@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { keepPreviousData } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
 	SelectItem,
 	SelectPopup,
@@ -110,10 +111,21 @@ export function PlayerBreakdown({
 		});
 	}, [data, roleFilter, classFilter]);
 
-	if (isLoading) {
+	if (isLoading && !data) {
 		return (
-			<div className="font-body text-sm text-dimmed">
-				Loading player data...
+			<div className="flex flex-col gap-3">
+				<Skeleton className="h-4 w-48" />
+				<div className="flex gap-2">
+					<Skeleton className="h-8 w-40" />
+					<Skeleton className="h-8 w-28" />
+					<Skeleton className="h-8 w-28" />
+				</div>
+				<div className="border border-border">
+					<Skeleton className="h-10 w-full" />
+					{Array.from({ length: 8 }).map((_, i) => (
+						<Skeleton key={i} className="h-10 w-full border-t border-border" />
+					))}
+				</div>
 			</div>
 		);
 	}

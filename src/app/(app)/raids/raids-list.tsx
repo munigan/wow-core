@@ -1,10 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc/client";
 
 export function RaidsList() {
-	const { data: raids } = trpc.raids.list.useQuery();
+	const { data: raids, isLoading } = trpc.raids.list.useQuery();
+
+	if (isLoading) {
+		return (
+			<div className="flex flex-col gap-1">
+				{Array.from({ length: 3 }).map((_, i) => (
+					<Skeleton key={i} className="h-14 w-full" />
+				))}
+			</div>
+		);
+	}
 
 	if (!raids || raids.length === 0) {
 		return (

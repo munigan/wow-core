@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc/client";
 import { EncounterRow } from "./encounter-row";
 import { PlayerBreakdown } from "./player-breakdown";
@@ -25,7 +26,25 @@ function formatNumber(n: number): string {
 export function RaidDetails({ raidId }: RaidDetailsProps) {
 	const { data } = trpc.raids.getById.useQuery({ raidId });
 
-	if (!data) return null;
+	if (!data) {
+		return (
+			<div className="flex flex-col gap-8 p-8">
+				<div className="flex flex-col gap-1">
+					<Skeleton className="h-10 w-64" />
+					<Skeleton className="h-4 w-96" />
+				</div>
+				<div className="grid grid-cols-4 gap-3">
+					{Array.from({ length: 4 }).map((_, i) => (
+						<Skeleton key={i} className="h-20 w-full" />
+					))}
+				</div>
+				<div className="flex flex-col gap-3">
+					<Skeleton className="h-4 w-40" />
+					<Skeleton className="h-48 w-full" />
+				</div>
+			</div>
+		);
+	}
 
 	const { encounters, ...raid } = data;
 
