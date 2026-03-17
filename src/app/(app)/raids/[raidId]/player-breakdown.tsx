@@ -73,6 +73,18 @@ function formatSpec(spec: string | null, playerClass: string | null): string | n
 	return specName.charAt(0).toUpperCase() + specName.slice(1);
 }
 
+function getUptimeAttrs(value: number | null): Record<string, boolean | undefined> {
+	if (value === null) return {};
+	if (value >= 100) return { "data-full": true };
+	if (value >= 80) return { "data-partial": true };
+	return {};
+}
+
+function formatUptime(value: number | null): string {
+	if (value === null) return "—";
+	return `${Math.round(value)}%`;
+}
+
 type EncounterOption = {
 	id: string;
 	bossName: string;
@@ -203,7 +215,11 @@ export function PlayerBreakdown({
 							<th className="py-2.5 text-left font-normal">Class</th>
 							<th className="w-28 py-2.5 text-left font-normal">DPS</th>
 							<th className="w-28 py-2.5 text-left font-normal">Damage</th>
-							<th className="w-24 py-2.5 pr-4 text-left font-normal">Deaths</th>
+							<th className="w-24 py-2.5 text-left font-normal">Deaths</th>
+							<th className="w-16 py-2.5 text-left font-normal">Flask</th>
+							<th className="w-16 py-2.5 text-left font-normal">Food</th>
+							<th className="w-16 py-2.5 text-left font-normal">Pots</th>
+							<th className="w-16 py-2.5 pr-4 text-left font-normal">Engi</th>
 						</tr>
 					</thead>
 					<tbody className="text-sm">
@@ -244,9 +260,38 @@ export function PlayerBreakdown({
 								</td>
 								<td
 									data-has-deaths={player.deathCount > 0 || undefined}
-									className="py-2.5 pr-4 text-dimmed data-has-deaths:text-danger"
+									className="py-2.5 text-dimmed data-has-deaths:text-danger"
 								>
 									{player.deathCount}
+								</td>
+								<td
+									{...getUptimeAttrs(player.flaskUptime)}
+									className="py-2.5 text-danger data-full:text-accent data-partial:text-warning"
+								>
+									{formatUptime(player.flaskUptime)}
+								</td>
+								<td
+									{...getUptimeAttrs(player.foodUptime)}
+									className="py-2.5 text-danger data-full:text-accent data-partial:text-warning"
+								>
+									{formatUptime(player.foodUptime)}
+								</td>
+								<td
+									data-has-prepot={player.hasPrePot || undefined}
+									data-has-value={player.totalPots > 0 || undefined}
+									className="py-2.5 text-dimmed data-has-value:text-primary data-has-prepot:text-accent"
+								>
+									{player.totalPots > 0
+										? player.hasPrePot
+											? `${player.totalPots} (PP)`
+											: player.totalPots
+										: "0"}
+								</td>
+								<td
+									data-has-value={player.totalEngi > 0 || undefined}
+									className="py-2.5 pr-4 text-dimmed data-has-value:text-primary"
+								>
+									{player.totalEngi}
 								</td>
 							</tr>
 						))}

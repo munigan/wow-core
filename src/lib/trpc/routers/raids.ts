@@ -2,6 +2,8 @@ import { TRPCError } from "@trpc/server";
 import { and, count, desc, eq, inArray, sql, sum } from "drizzle-orm";
 import { z } from "zod/v4";
 import { db } from "@/lib/db";
+import { buffUptimes } from "@/lib/db/schema/buff-uptimes";
+import { consumableUses } from "@/lib/db/schema/consumable-uses";
 import { encounterPlayers } from "@/lib/db/schema/encounter-players";
 import { encounters } from "@/lib/db/schema/encounters";
 import { playerDeaths } from "@/lib/db/schema/player-deaths";
@@ -175,17 +177,61 @@ export const raidsRouter = createTRPCRouter({
 				);
 			}
 
+			// Buff uptimes
+			const uptimes = await db
+				.select()
+				.from(buffUptimes)
+				.where(eq(buffUptimes.encounterId, input.encounterId));
+
+			const uptimeMap = new Map(
+				uptimes.map((u) => [u.playerGuid, u]),
+			);
+
+			// Consumable uses
+			const consumables = await db
+				.select()
+				.from(consumableUses)
+				.where(eq(consumableUses.encounterId, input.encounterId));
+
+			const consumableMap = new Map<
+				string,
+				{ totalPots: number; hasPrePot: boolean; totalEngi: number }
+			>();
+			for (const c of consumables) {
+				const existing = consumableMap.get(c.playerGuid) ?? {
+					totalPots: 0,
+					hasPrePot: false,
+					totalEngi: 0,
+				};
+				if (c.type === "potion" || c.type === "mana_potion") {
+					existing.totalPots += c.count;
+					if (c.prePot) existing.hasPrePot = true;
+				} else if (c.type === "engineering") {
+					existing.totalEngi += c.count;
+				}
+				consumableMap.set(c.playerGuid, existing);
+			}
+
 			const durationMs = encounter.encounters.durationMs;
 
 			const playersWithStats = players
-				.map((p) => ({
-					...p,
-					dps:
-						durationMs > 0
-							? Math.round((p.damage / durationMs) * 1000)
-							: 0,
-					deathCount: deathCountByPlayer.get(p.playerGuid) ?? 0,
-				}))
+				.map((p) => {
+					const uptime = uptimeMap.get(p.playerGuid);
+					const cons = consumableMap.get(p.playerGuid);
+					return {
+						...p,
+						dps:
+							durationMs > 0
+								? Math.round((p.damage / durationMs) * 1000)
+								: 0,
+						deathCount: deathCountByPlayer.get(p.playerGuid) ?? 0,
+						flaskUptime: uptime?.flaskUptimePercent ?? null,
+						foodUptime: uptime?.foodUptimePercent ?? null,
+						totalPots: cons?.totalPots ?? 0,
+						hasPrePot: cons?.hasPrePot ?? false,
+						totalEngi: cons?.totalEngi ?? 0,
+					};
+				})
 				.sort((a, b) => b.dps - a.dps);
 
 			return {
