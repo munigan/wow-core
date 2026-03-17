@@ -24,7 +24,7 @@ export type HeatmapRow = {
 type HeatmapGridProps = {
 	rows: HeatmapRow[];
 	columns: string[];
-	tooltipFormatter?: (
+	tooltipFormatterAction?: (
 		row: HeatmapRow,
 		colIndex: number,
 		cell: HeatmapCell,
@@ -40,7 +40,7 @@ function formatCellValue(cell: HeatmapCell): string {
 export function HeatmapGrid({
 	rows,
 	columns,
-	tooltipFormatter,
+	tooltipFormatterAction,
 }: HeatmapGridProps) {
 	if (rows.length === 0) return null;
 
@@ -77,7 +77,7 @@ export function HeatmapGrid({
 					</span>
 					{row.cells.map((cell, colIndex) => (
 						<div key={colIndex} className="flex justify-center">
-							{tooltipFormatter ? (
+							{tooltipFormatterAction ? (
 								<TooltipRoot>
 									<TooltipTrigger render={<span />}>
 										<span
@@ -89,7 +89,7 @@ export function HeatmapGrid({
 										</span>
 									</TooltipTrigger>
 									<TooltipContent side="top">
-										{tooltipFormatter(row, colIndex, cell)}
+										{tooltipFormatterAction(row, colIndex, cell)}
 									</TooltipContent>
 								</TooltipRoot>
 							) : (

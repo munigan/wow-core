@@ -21,7 +21,7 @@ type AreaChartProps<T = Record<string, unknown>> = {
   data: AreaChartDataPoint<T>[];
   color?: string;
   height?: number;
-  tooltipFormatter?: (point: AreaChartDataPoint<T>) => ReactNode;
+  tooltipFormatterAction?: (point: AreaChartDataPoint<T>) => ReactNode;
 };
 
 type CustomTooltipProps<T> = {
@@ -43,7 +43,7 @@ export function AreaChart<T = Record<string, unknown>>({
   data,
   color = "var(--color-accent)",
   height = 280,
-  tooltipFormatter,
+  tooltipFormatterAction,
 }: AreaChartProps<T>) {
   const gradientId = useId();
 
@@ -76,7 +76,7 @@ export function AreaChart<T = Record<string, unknown>>({
           width={48}
         />
         <Tooltip
-          content={<ChartTooltip formatter={tooltipFormatter} />}
+          content={<ChartTooltip formatter={tooltipFormatterAction} />}
           cursor={{ stroke: "var(--color-border)", strokeDasharray: "4 4" }}
         />
         <Area
