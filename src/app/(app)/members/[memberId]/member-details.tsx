@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import dkIcon from "@/assets/classes/dk.png";
 import druidIcon from "@/assets/classes/druid.png";
 import hunterIcon from "@/assets/classes/hunter.png";
@@ -12,13 +11,12 @@ import rogueIcon from "@/assets/classes/rogue.png";
 import shamanIcon from "@/assets/classes/shaman.png";
 import warlockIcon from "@/assets/classes/warlock.png";
 import warriorIcon from "@/assets/classes/warrior.png";
+import { AreaChart } from "@/components/ui/area-chart";
+import { Card } from "@/components/ui/card";
+import { HeatmapGrid } from "@/components/ui/heatmap-grid";
+import type { HeatmapCell, HeatmapRow } from "@/components/ui/heatmap-grid";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-	TooltipContent,
-	TooltipLabel,
-	TooltipRoot,
-	TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { TooltipLabel } from "@/components/ui/tooltip";
 import { trpc } from "@/lib/trpc/client";
 
 const CLASS_ICONS: Record<string, typeof dkIcon> = {
@@ -55,16 +53,46 @@ function formatSpec(spec: string | null, playerClass: string | null): string | n
 	return specName.charAt(0).toUpperCase() + specName.slice(1);
 }
 
-function getUptimeAttrs(value: number | null): Record<string, boolean | undefined> {
-	if (value === null) return {};
-	if (value >= 100) return { "data-full": true };
-	if (value >= 80) return { "data-partial": true };
-	return {};
+function formatNumber(value: number): string {
+	return value.toLocaleString("en-US");
 }
 
-function formatUptime(value: number | null): string {
-	if (value === null) return "—";
-	return `${Math.round(value)}%`;
+function getStatAttrs(
+	type: "dps" | "attendance" | "prepot" | "deaths",
+	value: number,
+): Record<string, boolean | undefined> {
+	switch (type) {
+		case "prepot":
+			if (value >= 80) return { "data-good": true };
+			if (value >= 50) return { "data-warn": true };
+			return {};
+		case "deaths":
+			if (value === 0) return { "data-good": true };
+			if (value <= 5) return { "data-warn": true };
+			return {};
+		default:
+			return { "data-neutral": true };
+	}
+}
+
+function getUptimeStatus(value: number | null): "full" | "partial" | "empty" {
+	if (value === null) return "empty";
+	if (value >= 95) return "full";
+	if (value >= 80) return "partial";
+	return "empty";
+}
+
+function getCoverageStatus(covered: number, total: number): "full" | "partial" | "empty" {
+	if (total === 0) return "empty";
+	const ratio = covered / total;
+	if (ratio >= 1) return "full";
+	if (ratio >= 0.5) return "partial";
+	return "empty";
+}
+
+function formatDate(dateStr: string): string {
+	const date = new Date(dateStr);
+	return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 type MemberDetailsProps = {
@@ -77,23 +105,68 @@ export function MemberDetails({ memberId }: MemberDetailsProps) {
 	if (isLoading || !data) {
 		return (
 			<div className="flex flex-col gap-8 p-8">
+				{/* Header skeleton */}
 				<div className="flex flex-col gap-1">
 					<Skeleton className="h-10 w-48" />
 					<Skeleton className="h-4 w-64" />
 				</div>
-				<div className="border border-border">
-					<Skeleton className="h-10 w-full" />
-					{Array.from({ length: 6 }).map((_, i) => (
-						<Skeleton key={i} className="h-12 w-full border-t border-border" />
+				{/* Stat cards skeleton */}
+				<div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+					{Array.from({ length: 4 }).map((_, i) => (
+						<Card key={i}>
+							<Skeleton className="h-8 w-24" />
+							<Skeleton className="h-3 w-16" />
+						</Card>
 					))}
+				</div>
+				{/* Chart skeleton */}
+				<div className="flex flex-col gap-3">
+					<Skeleton className="h-3 w-48" />
+					<Skeleton className="h-70" />
+				</div>
+				{/* Heatmap skeleton */}
+				<div className="flex flex-col gap-3">
+					<Skeleton className="h-3 w-40" />
+					<Skeleton className="h-48" />
 				</div>
 			</div>
 		);
 	}
 
-	const { member, raids } = data;
+	const { member, stats, dpsTrend, heatmapData } = data;
 	const playerClass = member.class;
 	const spec = formatSpec(member.latestSpec, playerClass);
+
+	const hasData = dpsTrend.length > 0 || heatmapData.length > 0;
+
+	// Transform DPS trend for chart
+	const chartData = dpsTrend.map((d) => ({
+		label: formatDate(d.date),
+		value: d.avgDps,
+		meta: { encounters: d.encounters, date: d.date },
+	}));
+
+	// Transform heatmap data
+	const heatmapRows: HeatmapRow[] = heatmapData.map((d) => ({
+		label: formatDate(d.date),
+		badge: `${d.encounterCount}`,
+		cells: [
+			{
+				value: d.flaskUptime ?? undefined,
+				display: d.flaskUptime !== null ? `${Math.round(d.flaskUptime)}%` : "—",
+				status: getUptimeStatus(d.flaskUptime),
+			},
+			{
+				value: d.foodUptime ?? undefined,
+				display: d.foodUptime !== null ? `${Math.round(d.foodUptime)}%` : "—",
+				status: getUptimeStatus(d.foodUptime),
+			},
+			{
+				display: `${d.consumableCoverage.covered}/${d.consumableCoverage.total}`,
+				status: getCoverageStatus(d.consumableCoverage.covered, d.consumableCoverage.total),
+			},
+		] satisfies HeatmapCell[],
+	}));
 
 	return (
 		<div className="flex flex-col gap-8 p-8">
@@ -122,143 +195,166 @@ export function MemberDetails({ memberId }: MemberDetailsProps) {
 				</div>
 			</div>
 
-			{/* Raid consumable table */}
+			{/* Stat Cards */}
+			<div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+				<Card>
+					<span
+						{...getStatAttrs("dps", stats.avgDps)}
+						className="font-heading text-3xl font-bold text-danger data-good:text-accent data-neutral:text-primary data-warn:text-warning"
+					>
+						{hasData ? formatNumber(stats.avgDps) : "—"}
+					</span>
+					<span className="font-body text-2xs uppercase tracking-wider text-secondary">
+						Avg DPS
+					</span>
+				</Card>
+				<Card>
+					<span
+						{...getStatAttrs("attendance", stats.raidAttendance)}
+						className="font-heading text-3xl font-bold text-danger data-good:text-accent data-neutral:text-primary data-warn:text-warning"
+					>
+						{hasData ? stats.raidAttendance : "—"}
+					</span>
+					<span className="font-body text-2xs uppercase tracking-wider text-secondary">
+						Raids Attended
+					</span>
+				</Card>
+				<Card>
+					<span
+						{...getStatAttrs("prepot", stats.prePotRate)}
+						className="font-heading text-3xl font-bold text-danger data-good:text-accent data-neutral:text-primary data-warn:text-warning"
+					>
+						{hasData ? `${stats.prePotRate}%` : "—"}
+					</span>
+					<span className="font-body text-2xs uppercase tracking-wider text-secondary">
+						Pre-pot Rate
+					</span>
+				</Card>
+				<Card>
+					<span
+						{...getStatAttrs("deaths", stats.totalDeaths)}
+						className="font-heading text-3xl font-bold text-danger data-good:text-accent data-neutral:text-primary data-warn:text-warning"
+					>
+						{hasData ? stats.totalDeaths : "—"}
+					</span>
+					<span className="font-body text-2xs uppercase tracking-wider text-secondary">
+						Total Deaths
+					</span>
+				</Card>
+			</div>
+
+			{/* DPS Trend Chart */}
 			<div className="flex flex-col gap-3">
 				<span className="font-body text-xs uppercase tracking-wider text-secondary">
-					Consumable Usage Per Raid
+					// DPS Trend — Last 8 Weeks
 				</span>
-
-				{raids.length === 0 ? (
-					<p className="font-body text-sm text-dimmed">
-						No raid data found for this member.
-					</p>
+				{chartData.length > 0 ? (
+					<AreaChart
+						data={chartData}
+						color="var(--color-accent)"
+						height={280}
+						tooltipFormatterAction={(point) => (
+							<div className="flex flex-col gap-1">
+								<TooltipLabel>{point.meta?.date ?? point.label}</TooltipLabel>
+								<div className="flex items-center justify-between gap-6 font-body text-xs">
+									<span className="text-secondary">Avg DPS</span>
+									<span className="font-semibold text-accent">
+										{formatNumber(point.value)}
+									</span>
+								</div>
+								<div className="flex items-center justify-between gap-6 font-body text-xs">
+									<span className="text-secondary">Encounters</span>
+									<span className="text-primary">{point.meta?.encounters}</span>
+								</div>
+							</div>
+						)}
+					/>
 				) : (
-					<div className="border border-border bg-card">
-						<table className="w-full font-body">
-							<thead>
-								<tr className="border-b border-border text-2xs uppercase tracking-wider text-dimmed">
-									<th className="py-2.5 pl-4 text-left font-normal">Raid</th>
-									<th className="w-28 py-2.5 text-left font-normal">Date</th>
-									<th className="w-20 py-2.5 text-left font-normal">Flask</th>
-									<th className="w-20 py-2.5 text-left font-normal">Food</th>
-									<th className="w-20 py-2.5 text-left font-normal">Pots</th>
-									<th className="w-20 py-2.5 pr-4 text-left font-normal">Engi</th>
-								</tr>
-							</thead>
-							<tbody className="text-sm">
-								{raids.map((raid) => {
-									const potItems = raid.consumableItems.filter(
-										(c) => c.type === "potion" || c.type === "mana_potion" || c.type === "flame_cap",
-									);
-									const engiItems = raid.consumableItems.filter(
-										(c) => c.type === "engineering",
-									);
-									const potLabel = raid.totalPots > 0
-										? raid.hasPrePot
-											? `${raid.totalPots} (PP)`
-											: String(raid.totalPots)
-										: "0";
+					<div className="flex h-70 items-center justify-center border border-border bg-card">
+						<span className="font-body text-sm text-dimmed">
+							No encounter data in the last 8 weeks
+						</span>
+					</div>
+				)}
+			</div>
 
-									const dateStr = new Date(raid.raidDate).toLocaleDateString("en-US", {
-										year: "numeric",
-										month: "short",
-										day: "numeric",
-									});
+			{/* Consumable Compliance Heatmap */}
+			<div className="flex flex-col gap-3">
+				<span className="font-body text-xs uppercase tracking-wider text-secondary">
+					// Consumable Compliance
+				</span>
+				{heatmapRows.length > 0 ? (
+					<HeatmapGrid
+						rows={heatmapRows}
+						columns={["Flask", "Food", "Consumables"]}
+						tooltipFormatterAction={(row, colIndex) => {
+							const dateData = heatmapData.find((d) => formatDate(d.date) === row.label);
+							if (!dateData) return null;
 
-									return (
-										<tr
-											key={raid.raidId}
-											className="border-b border-elevated"
-										>
-											<td className="py-2.5 pl-4">
-												<Link
-													href={`/raids/${raid.raidId}`}
-													className="font-semibold text-primary hover:text-accent"
-												>
-													{raid.raidName}
-												</Link>
-											</td>
-											<td className="py-2.5 text-secondary">
-												{dateStr}
-											</td>
-											<td
-												{...getUptimeAttrs(raid.flaskUptime)}
-												className="py-2.5 text-danger data-full:text-accent data-partial:text-warning"
-											>
-												{formatUptime(raid.flaskUptime)}
-											</td>
-											<td
-												{...getUptimeAttrs(raid.foodUptime)}
-												className="py-2.5 text-danger data-full:text-accent data-partial:text-warning"
-											>
-												{formatUptime(raid.foodUptime)}
-											</td>
-											<td
-												data-has-prepot={raid.hasPrePot || undefined}
-												data-has-value={raid.totalPots > 0 || undefined}
-												className="py-2.5 text-dimmed data-has-value:text-primary data-has-prepot:text-accent"
-											>
-												{potItems.length > 0 ? (
-													<TooltipRoot>
-														<TooltipTrigger render={<span />}>
-															<span className="cursor-default underline decoration-dashed decoration-dimmed underline-offset-4 hover:decoration-secondary">
-																{potLabel}
-															</span>
-														</TooltipTrigger>
-														<TooltipContent side="top">
-															<TooltipLabel>Consumables</TooltipLabel>
-															<div className="flex flex-col gap-1">
-																{potItems.map((item) => (
-																	<div
-																		key={item.spellName}
-																		className="flex items-center justify-between gap-6 font-body text-xs"
-																	>
-																		<span className="text-accent">{item.spellName}</span>
-																		<span className="text-secondary">x{item.count}</span>
-																	</div>
-																))}
-															</div>
-														</TooltipContent>
-													</TooltipRoot>
-												) : (
-													potLabel
-												)}
-											</td>
-											<td
-												data-has-value={raid.totalEngi > 0 || undefined}
-												className="py-2.5 pr-4 text-dimmed data-has-value:text-primary"
-											>
-												{engiItems.length > 0 ? (
-													<TooltipRoot>
-														<TooltipTrigger render={<span />}>
-															<span className="cursor-default underline decoration-dashed decoration-dimmed underline-offset-4 hover:decoration-secondary">
-																{raid.totalEngi}
-															</span>
-														</TooltipTrigger>
-														<TooltipContent side="top">
-															<TooltipLabel>Consumables</TooltipLabel>
-															<div className="flex flex-col gap-1">
-																{engiItems.map((item) => (
-																	<div
-																		key={item.spellName}
-																		className="flex items-center justify-between gap-6 font-body text-xs"
-																	>
-																		<span className="text-accent">{item.spellName}</span>
-																		<span className="text-secondary">x{item.count}</span>
-																	</div>
-																))}
-															</div>
-														</TooltipContent>
-													</TooltipRoot>
-												) : (
-													raid.totalEngi
-												)}
-											</td>
-										</tr>
-									);
-								})}
-							</tbody>
-						</table>
+							if (colIndex === 0) {
+								return (
+									<div className="flex flex-col gap-1">
+										<TooltipLabel>Flask Uptime</TooltipLabel>
+										<span className="font-body text-xs text-primary">
+											{dateData.flaskUptime !== null ? `${Math.round(dateData.flaskUptime)}%` : "No data"}
+										</span>
+										<span className="font-body text-2xs text-dimmed">
+											{dateData.encounterCount} encounters
+										</span>
+									</div>
+								);
+							}
+
+							if (colIndex === 1) {
+								return (
+									<div className="flex flex-col gap-1">
+										<TooltipLabel>Food Uptime</TooltipLabel>
+										<span className="font-body text-xs text-primary">
+											{dateData.foodUptime !== null ? `${Math.round(dateData.foodUptime)}%` : "No data"}
+										</span>
+										<span className="font-body text-2xs text-dimmed">
+											{dateData.encounterCount} encounters
+										</span>
+									</div>
+								);
+							}
+
+							// Consumables column — show per-boss breakdown
+							return (
+								<div className="flex flex-col gap-2">
+									<TooltipLabel>Consumables</TooltipLabel>
+									<span className="font-body text-2xs text-dimmed">
+										{dateData.consumableCoverage.covered}/{dateData.consumableCoverage.total} encounters covered
+									</span>
+									{Object.entries(dateData.consumablesByBoss).map(([boss, items]) => (
+										<div key={boss} className="flex flex-col gap-0.5">
+											<span className="font-body text-2xs font-bold text-primary">{boss}</span>
+											{items.length > 0 ? (
+												items.map((item, i) => (
+													<div key={i} className="flex items-center justify-between gap-6 font-body text-xs">
+														<span className="text-accent">
+															{item.spellName}
+															{item.isPrePot && (
+																<span className="text-warning"> (PP)</span>
+															)}
+														</span>
+														<span className="text-secondary">x{item.count}</span>
+													</div>
+												))
+											) : (
+												<span className="font-body text-2xs text-dimmed">None</span>
+											)}
+										</div>
+									))}
+								</div>
+							);
+						}}
+					/>
+				) : (
+					<div className="flex h-32 items-center justify-center border border-border bg-card">
+						<span className="font-body text-sm text-dimmed">
+							No consumable data in the last 8 weeks
+						</span>
 					</div>
 				)}
 			</div>
