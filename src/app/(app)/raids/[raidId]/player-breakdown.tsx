@@ -2,6 +2,12 @@
 
 import Image from "next/image";
 import { useMemo, useState } from "react";
+import {
+	SelectItem,
+	SelectPopup,
+	SelectRoot,
+	SelectTrigger,
+} from "@/components/ui/select";
 import dkIcon from "@/assets/classes/dk.png";
 import druidIcon from "@/assets/classes/druid.png";
 import hunterIcon from "@/assets/classes/hunter.png";
@@ -103,28 +109,32 @@ export function PlayerBreakdown({
 					Per-Player Breakdown
 				</span>
 				<div className="flex gap-2">
-					<select
+					<SelectRoot
 						value={roleFilter}
-						onChange={(e) => setRoleFilter(e.target.value)}
-						className="border border-border bg-elevated px-2 py-1 font-body text-sm text-secondary"
+						onValueChangeAction={(v) => setRoleFilter(v ?? "all")}
 					>
-						<option value="all">All Roles</option>
-						<option value="tank">Tank</option>
-						<option value="healer">Healer</option>
-						<option value="dps">DPS</option>
-					</select>
-					<select
+						<SelectTrigger placeholder="All Roles" size="sm" />
+						<SelectPopup>
+							<SelectItem value="all">All Roles</SelectItem>
+							<SelectItem value="tank">Tank</SelectItem>
+							<SelectItem value="healer">Healer</SelectItem>
+							<SelectItem value="dps">DPS</SelectItem>
+						</SelectPopup>
+					</SelectRoot>
+					<SelectRoot
 						value={classFilter}
-						onChange={(e) => setClassFilter(e.target.value)}
-						className="border border-border bg-elevated px-2 py-1 font-body text-2xs text-secondary capitalize"
+						onValueChangeAction={(v) => setClassFilter(v ?? "all")}
 					>
-						<option value="all">All Classes</option>
-						{uniqueClasses.map((cls) => (
-							<option key={cls} value={cls} className="capitalize">
-								{cls}
-							</option>
-						))}
-					</select>
+						<SelectTrigger placeholder="All Classes" size="sm" />
+						<SelectPopup>
+							<SelectItem value="all">All Classes</SelectItem>
+							{uniqueClasses.map((cls) => (
+								<SelectItem key={cls} value={cls}>
+									{cls}
+								</SelectItem>
+							))}
+						</SelectPopup>
+					</SelectRoot>
 				</div>
 			</div>
 

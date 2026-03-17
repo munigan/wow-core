@@ -2,6 +2,7 @@
 
 import { Select as BaseSelect } from "@base-ui/react/select";
 import { Check, ChevronDown } from "lucide-react";
+import { tv } from "tailwind-variants";
 import { twMerge } from "tailwind-merge";
 
 export type SelectOption = {
@@ -39,21 +40,33 @@ export const SelectRoot = ({
 	);
 };
 
+const triggerVariants = tv({
+	base: "flex items-center gap-2 border border-border bg-elevated font-body font-semibold uppercase tracking-wide text-primary outline-none transition-colors hover:border-border-light disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border",
+	variants: {
+		size: {
+			default: "px-3.5 py-2.5 text-xs",
+			sm: "px-2.5 py-1.5 text-2xs",
+		},
+	},
+	defaultVariants: {
+		size: "default",
+	},
+});
+
 export type SelectTriggerProps = {
 	placeholder?: string;
 	className?: string;
+	size?: "default" | "sm";
 };
 
 export const SelectTrigger = ({
 	placeholder,
 	className,
+	size,
 }: SelectTriggerProps) => {
 	return (
 		<BaseSelect.Trigger
-			className={twMerge(
-				"flex items-center gap-2 border border-border bg-elevated px-3.5 py-2.5 font-body text-xs font-semibold uppercase tracking-wide text-primary outline-none transition-colors hover:border-border-light disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border",
-				className,
-			)}
+			className={triggerVariants({ size, className })}
 		>
 			<BaseSelect.Value
 				placeholder={placeholder}
