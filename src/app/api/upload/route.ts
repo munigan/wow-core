@@ -37,6 +37,28 @@ async function saveRaidToDb(
 		parsedRaid.players.map((p) => [p.guid, p]),
 	);
 
+	// Upsert members from raid players (always, even for duplicates)
+	if (parsedRaid.players.length > 0) {
+		await tx
+			.insert(members)
+			.values(
+				parsedRaid.players.map((p) => ({
+					coreId: selectedRaid.coreId,
+					name: p.name,
+					class: p.class,
+					spec: p.spec,
+				})),
+			)
+			.onConflictDoUpdate({
+				target: [members.coreId, members.name],
+				set: {
+					class: sql`excluded.class`,
+					spec: sql`excluded.spec`,
+					updatedAt: sql`now()`,
+				},
+			});
+	}
+
 	// Skip if raid with same core + date + instance already exists
 	const [existingRaid] = await tx
 		.select({ id: raids.id })
@@ -73,28 +95,6 @@ async function saveRaidToDb(
 			durationMs: parsedRaid.raidDurationMs,
 		})
 		.returning({ id: raids.id });
-
-	// Upsert members from raid players
-	if (parsedRaid.players.length > 0) {
-		await tx
-			.insert(members)
-			.values(
-				parsedRaid.players.map((p) => ({
-					coreId: selectedRaid.coreId,
-					name: p.name,
-					class: p.class,
-					spec: p.spec,
-				})),
-			)
-			.onConflictDoUpdate({
-				target: [members.coreId, members.name],
-				set: {
-					class: sql`excluded.class`,
-					spec: sql`excluded.spec`,
-					updatedAt: sql`now()`,
-				},
-			});
-	}
 
 	for (let i = 0; i < parsedRaid.encounters.length; i++) {
 		const enc = parsedRaid.encounters[i];
