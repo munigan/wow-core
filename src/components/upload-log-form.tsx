@@ -430,7 +430,7 @@ export function UploadLogForm({
 
 	const handleDone = () => {
 		onDoneAction();
-		void utils.raids.list.invalidate();
+		void utils.invalidate();
 		router.push("/raids");
 	};
 

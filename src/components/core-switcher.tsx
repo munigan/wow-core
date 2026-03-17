@@ -16,6 +16,7 @@ import {
 	PopoverTrigger,
 } from "@/components/ui/popover";
 import { authClient } from "@/lib/auth-client";
+import { trpc } from "@/lib/trpc/client";
 
 type Core = {
 	id: string;
@@ -30,6 +31,7 @@ type CoreSwitcherProps = {
 
 export function CoreSwitcher({ cores, activeCoreId }: CoreSwitcherProps) {
 	const router = useRouter();
+	const utils = trpc.useUtils();
 	const [isDialogOpen, setIsDialogOpen] = useState(false);
 	const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
@@ -46,6 +48,7 @@ export function CoreSwitcher({ cores, activeCoreId }: CoreSwitcherProps) {
 		});
 
 		setIsPopoverOpen(false);
+		void utils.invalidate();
 		router.push("/");
 		router.refresh();
 	}
