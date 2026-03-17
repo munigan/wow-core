@@ -8,6 +8,7 @@ export const metadata: Metadata = {
 
 export default async function RaidsPage() {
 	void trpc.raids.list.prefetch();
+	void trpc.raids.listInstances.prefetch();
 
 	return (
 		<HydrateClient>

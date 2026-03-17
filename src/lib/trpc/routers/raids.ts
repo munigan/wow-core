@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, count, desc, eq, inArray, sql, sum } from "drizzle-orm";
+import { and, count, countDistinct, desc, eq, gte, inArray, isNotNull, sql, sum } from "drizzle-orm";
 import { z } from "zod/v4";
 import { db } from "@/lib/db";
 import { buffUptimes } from "@/lib/db/schema/buff-uptimes";
@@ -11,12 +11,133 @@ import { raids } from "@/lib/db/schema/raids";
 import { createTRPCRouter, protectedProcedure } from "@/lib/trpc/init";
 
 export const raidsRouter = createTRPCRouter({
-	list: protectedProcedure.query(async ({ ctx }) => {
-		return db
-			.select()
+	list: protectedProcedure
+		.input(
+			z
+				.object({
+					instance: z.string().optional(),
+					dateRange: z.enum(["7d", "30d", "90d", "all"]).optional(),
+				})
+				.optional(),
+		)
+		.query(async ({ ctx, input }) => {
+			const conditions = [eq(raids.coreId, ctx.coreId)];
+
+			if (input?.instance) {
+				conditions.push(eq(raids.raidInstance, input.instance));
+			}
+
+			if (input?.dateRange && input.dateRange !== "all") {
+				const days = { "7d": 7, "30d": 30, "90d": 90 }[input.dateRange];
+				const cutoff = new Date();
+				cutoff.setDate(cutoff.getDate() - days);
+				conditions.push(gte(raids.date, cutoff));
+			}
+
+			const raidRows = await db
+				.select()
+				.from(raids)
+				.where(and(...conditions))
+				.orderBy(desc(raids.date));
+
+			if (raidRows.length === 0) return [];
+
+			const raidIds = raidRows.map((r) => r.id);
+
+			// Aggregate boss kills per raid
+			const bossKills = await db
+				.select({
+					raidId: encounters.raidId,
+					bossKills: countDistinct(encounters.bossName),
+				})
+				.from(encounters)
+				.where(
+					and(
+						inArray(encounters.raidId, raidIds),
+						eq(encounters.result, "kill"),
+					),
+				)
+				.groupBy(encounters.raidId);
+
+			// Get all encounter IDs for these raids
+			const encounterRows = await db
+				.select({ id: encounters.id, raidId: encounters.raidId })
+				.from(encounters)
+				.where(inArray(encounters.raidId, raidIds));
+
+			const encounterIds = encounterRows.map((e) => e.id);
+			const encounterToRaid = new Map(encounterRows.map((e) => [e.id, e.raidId]));
+
+			// Aggregate player count per raid (through encounters)
+			let playerCountMap = new Map<string, number>();
+			let deathCountMap = new Map<string, number>();
+
+			if (encounterIds.length > 0) {
+				const playerCounts = await db
+					.select({
+						encounterId: encounterPlayers.encounterId,
+						playerGuid: encounterPlayers.playerGuid,
+					})
+					.from(encounterPlayers)
+					.where(inArray(encounterPlayers.encounterId, encounterIds));
+
+				// Count distinct players per raid
+				const playersPerRaid = new Map<string, Set<string>>();
+				for (const row of playerCounts) {
+					const raidId = encounterToRaid.get(row.encounterId);
+					if (!raidId) continue;
+					const existing = playersPerRaid.get(raidId) ?? new Set();
+					existing.add(row.playerGuid);
+					playersPerRaid.set(raidId, existing);
+				}
+				playerCountMap = new Map(
+					[...playersPerRaid.entries()].map(([raidId, guids]) => [raidId, guids.size]),
+				);
+
+				// Aggregate deaths per raid
+				const deathCounts = await db
+					.select({
+						encounterId: playerDeaths.encounterId,
+						deathCount: count(),
+					})
+					.from(playerDeaths)
+					.where(inArray(playerDeaths.encounterId, encounterIds))
+					.groupBy(playerDeaths.encounterId);
+
+				for (const row of deathCounts) {
+					const raidId = encounterToRaid.get(row.encounterId);
+					if (!raidId) continue;
+					deathCountMap.set(
+						raidId,
+						(deathCountMap.get(raidId) ?? 0) + row.deathCount,
+					);
+				}
+			}
+
+			const bossKillMap = new Map(
+				bossKills.map((b) => [b.raidId, b.bossKills]),
+			);
+
+			return raidRows.map((raid) => ({
+				...raid,
+				bossKills: bossKillMap.get(raid.id) ?? 0,
+				playerCount: playerCountMap.get(raid.id) ?? 0,
+				deathCount: deathCountMap.get(raid.id) ?? 0,
+			}));
+		}),
+
+	listInstances: protectedProcedure.query(async ({ ctx }) => {
+		const rows = await db
+			.select({ raidInstance: raids.raidInstance })
 			.from(raids)
-			.where(eq(raids.coreId, ctx.coreId))
-			.orderBy(desc(raids.date));
+			.where(
+				and(eq(raids.coreId, ctx.coreId), isNotNull(raids.raidInstance)),
+			)
+			.groupBy(raids.raidInstance);
+
+		return rows
+			.map((r) => r.raidInstance)
+			.filter((v): v is string => v !== null);
 	}),
 
 	listByCores: protectedProcedure
