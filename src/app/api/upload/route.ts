@@ -56,7 +56,7 @@ async function saveRaidToDb(
 				bossName: enc.bossName,
 				startTime: enc.startTime,
 				endTime: enc.endTime,
-				durationMs: enc.duration,
+				durationMs: Math.round(enc.duration * 1000),
 				result: enc.result,
 				difficulty: enc.difficulty,
 				order: i,
@@ -92,7 +92,7 @@ async function saveRaidToDb(
 					playerGuid: d.playerGuid,
 					playerName: d.playerName,
 					timestamp: d.timestamp,
-					timeIntoEncounter: d.timeIntoEncounter,
+					timeIntoEncounter: Math.round(d.timeIntoEncounter),
 					killingBlow: d.killingBlow ?? null,
 					recap: d.recap,
 				})),
@@ -228,8 +228,9 @@ export async function POST(request: Request) {
 			return Response.json({ error: "File too large" }, { status: 413 });
 		}
 		console.error("Upload error:", error);
+		const message = error instanceof Error ? error.message : "Failed to process log file";
 		return Response.json(
-			{ error: "Failed to process log file" },
+			{ error: message },
 			{ status: 500 },
 		);
 	}
