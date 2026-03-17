@@ -426,8 +426,11 @@ export function UploadLogForm({
 		xhrRef.current = null;
 	};
 
+	const utils = trpc.useUtils();
+
 	const handleDone = () => {
 		onDoneAction();
+		void utils.raids.list.invalidate();
 		router.push("/raids");
 	};
 
