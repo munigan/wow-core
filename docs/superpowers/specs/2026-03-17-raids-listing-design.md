@@ -21,9 +21,17 @@ Positioned below the page header, above the table.
 - Use data attributes for active state styling
 
 ### Filter behavior
-- Filters are client-side state passed as input to the tRPC query
-- Both filters applied server-side via query params
-- Changing a filter triggers a new query (TanStack Query handles caching)
+- Filter state managed via URL search params using `nuqs` library (`useQueryState`)
+- URL format: `/raids?instance=Naxxramas&range=30d` — filters are shareable/bookmarkable
+- `instance` param: `parseAsString` with default `null` (no filter)
+- `dateRange` param: `parseAsStringEnum(["7d", "30d", "90d", "all"])` with default `"all"`
+- Both filters passed as tRPC query input, applied server-side
+- Changing a filter updates the URL and triggers a new query (TanStack Query handles caching)
+- Uses `keepPreviousData` to avoid flash when switching filters
+
+### Dependencies
+- Install `nuqs` package: `pnpm add nuqs`
+- Wrap app with `NuqsAdapter` from `nuqs/adapters/next/app` in the providers or layout
 
 ## Table
 
@@ -90,10 +98,10 @@ Returns `string[]` of unique non-null instance names, used to populate the insta
 
 ### `src/app/(app)/raids/raids-list.tsx`
 - Rewrite to render filters + grouped table
-- Manages filter state (`instance`, `dateRange`) with `useState`
+- Manages filter state via nuqs `useQueryState` hooks synced to URL search params
 - Passes filters as input to `trpc.raids.list.useQuery({ instance, dateRange })`
 - Uses `keepPreviousData` when switching filters
-- Groups raids by date for rendering
+- Groups raids by date for rendering (using local timezone for date grouping)
 
 ### `src/app/(app)/raids/loading.tsx`
 - Update skeleton to match new layout: filter bar skeleton + grouped table skeleton
@@ -110,3 +118,5 @@ Returns `string[]` of unique non-null instance names, used to populate the insta
 - `src/app/(app)/raids/page.tsx` — add `listInstances` prefetch
 - `src/app/(app)/raids/raids-list.tsx` — full rewrite with filters, grouped table, loading states
 - `src/app/(app)/raids/loading.tsx` — update skeleton layout
+- `src/app/providers.tsx` or `src/app/(app)/layout.tsx` — wrap with `NuqsAdapter`
+- `package.json` — add `nuqs` dependency
