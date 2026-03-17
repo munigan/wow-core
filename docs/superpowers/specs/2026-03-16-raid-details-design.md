@@ -26,8 +26,8 @@ One row per boss attempt (kills and wipes).
 | id | uuid PK | defaultRandom |
 | raidId | uuid FK→raids | cascade delete |
 | bossName | text | not null |
-| startTime | timestamptz | not null |
-| endTime | timestamptz | not null |
+| startTime | text | not null, raw timestamp string from parser |
+| endTime | text | not null, raw timestamp string from parser |
 | durationMs | integer | not null |
 | result | text | "kill" or "wipe", not null |
 | difficulty | text | "10N", "10H", "25N", "25H", nullable |
@@ -128,16 +128,22 @@ Upload → `parseLog()` → return JSON summary → no DB writes
 4. Server returns created raid IDs in the response
 5. Client receives response → closes upload dialog → redirects to `/raids`
 
+### Parser-to-DB data mapping
+
+- **Player metadata** (name, class, spec): Resolved by looking up each player GUID key against `ParsedRaid.players` (the raid-level `PlayerInfo[]` array). The `combatStats`, `consumables`, `buffUptime`, and `externals` fields on encounters are all `Record<string, ...>` keyed by player GUID — the GUID becomes the `playerGuid` column, and name/class/spec come from the matching `PlayerInfo`.
+- **Encounter order**: Determined by the array index from `ParsedRaid.encounters`.
+- **Encounter duration**: Parser field is `EncounterSummary.duration` (in ms), stored as `encounters.durationMs`.
+
 ### Insert order within transaction
 
 1. Insert `raids` row (with new `raidInstance` and `durationMs` fields)
-2. Insert `encounters` rows for the raid
+2. Insert `encounters` rows for the raid (array index → `order` column)
 3. For each encounter, insert:
-   - `encounter_players` (from encounter's `combatStats`)
+   - `encounter_players` — damage/damageTaken from `combatStats` Record values, playerGuid from Record keys, playerName/class/spec from `ParsedRaid.players` lookup by GUID
    - `player_deaths` (from encounter's `deaths`)
-   - `consumable_uses` (from encounter's `consumables`)
-   - `buff_uptimes` (from encounter's `buffUptime`)
-   - `external_buffs` (from encounter's `externals`)
+   - `consumable_uses` (from encounter's `consumables` Record, playerGuid from keys)
+   - `buff_uptimes` (from encounter's `buffUptime` Record, playerGuid from keys)
+   - `external_buffs` (from encounter's `externals` Record, playerGuid from keys)
 
 ### Response format change
 
