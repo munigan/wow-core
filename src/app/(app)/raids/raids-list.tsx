@@ -2,6 +2,7 @@
 
 import { keepPreviousData } from "@tanstack/react-query";
 import Link from "next/link";
+import { Fragment } from "react";
 import { parseAsString, parseAsStringEnum, useQueryState } from "nuqs";
 import {
 	SelectItem,
@@ -167,8 +168,8 @@ export function RaidsList() {
 						</thead>
 						<tbody className="text-sm">
 							{[...grouped.entries()].map(([dateLabel, dateRaids]) => (
-								<>
-									<tr key={dateLabel}>
+								<Fragment key={dateLabel}>
+									<tr>
 										<td
 											colSpan={6}
 											className="bg-page py-2 pl-4 font-body text-xs uppercase tracking-wider text-secondary"
@@ -218,7 +219,7 @@ export function RaidsList() {
 											</tr>
 										);
 									})}
-								</>
+								</Fragment>
 							))}
 						</tbody>
 					</table>
