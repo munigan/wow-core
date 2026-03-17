@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, asc, countDistinct, desc, eq, ilike, inArray } from "drizzle-orm";
+import { and, asc, countDistinct, desc, eq, gte, ilike, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { db } from "@/lib/db";
 import { buffUptimes } from "@/lib/db/schema/buff-uptimes";
@@ -7,6 +7,7 @@ import { consumableUses } from "@/lib/db/schema/consumable-uses";
 import { encounterPlayers } from "@/lib/db/schema/encounter-players";
 import { encounters } from "@/lib/db/schema/encounters";
 import { members } from "@/lib/db/schema/members";
+import { playerDeaths } from "@/lib/db/schema/player-deaths";
 import { raids } from "@/lib/db/schema/raids";
 import { createTRPCRouter, protectedProcedure } from "@/lib/trpc/init";
 
@@ -139,6 +140,9 @@ export const membersRouter = createTRPCRouter({
 				});
 			}
 
+			const eightWeeksAgo = new Date();
+			eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 56);
+
 			// Find all encounter_players rows for this member in this core
 			const playerEncounters = await db
 				.select({
@@ -148,6 +152,9 @@ export const membersRouter = createTRPCRouter({
 					raidName: raids.name,
 					raidDate: raids.date,
 					spec: encounterPlayers.spec,
+					damage: encounterPlayers.damage,
+					durationMs: encounters.durationMs,
+					bossName: encounters.bossName,
 				})
 				.from(encounterPlayers)
 				.innerJoin(encounters, eq(encounterPlayers.encounterId, encounters.id))
@@ -156,65 +163,33 @@ export const membersRouter = createTRPCRouter({
 					and(
 						eq(encounterPlayers.playerName, member.name),
 						eq(raids.coreId, ctx.coreId),
+						gte(raids.date, eightWeeksAgo),
 					),
 				)
 				.orderBy(desc(raids.date));
 
 			if (playerEncounters.length === 0) {
-				return { member: { ...member, latestSpec: member.spec }, raids: [] };
-			}
-
-			// Group encounters by raid
-			const raidEncounterMap = new Map<
-				string,
-				{
-					raidName: string;
-					raidDate: Date;
-					encounters: { encounterId: string; playerGuid: string }[];
-				}
-			>();
-			for (const pe of playerEncounters) {
-				const existing = raidEncounterMap.get(pe.raidId) ?? {
-					raidName: pe.raidName,
-					raidDate: pe.raidDate,
-					encounters: [],
+				return {
+					member: { ...member, latestSpec: member.spec },
+					stats: { avgDps: 0, raidAttendance: 0, prePotRate: 0, totalDeaths: 0 },
+					dpsTrend: [],
+					heatmapData: [],
 				};
-				existing.encounters.push({
-					encounterId: pe.encounterId,
-					playerGuid: pe.playerGuid,
-				});
-				raidEncounterMap.set(pe.raidId, existing);
 			}
 
 			// Collect all encounter IDs and GUIDs for batch queries
 			const allEncounterIds = playerEncounters.map((pe) => pe.encounterId);
 			const allGuids = [...new Set(playerEncounters.map((pe) => pe.playerGuid))];
 
-			// Batch query buff_uptimes
-			const uptimes = await db
-				.select()
-				.from(buffUptimes)
-				.where(
-					and(
-						inArray(buffUptimes.encounterId, allEncounterIds),
-						inArray(buffUptimes.playerGuid, allGuids),
-					),
-				);
+			const [uptimes, consumables, deaths] = await Promise.all([
+				db.select().from(buffUptimes).where(and(inArray(buffUptimes.encounterId, allEncounterIds), inArray(buffUptimes.playerGuid, allGuids))),
+				db.select().from(consumableUses).where(and(inArray(consumableUses.encounterId, allEncounterIds), inArray(consumableUses.playerGuid, allGuids))),
+				db.select().from(playerDeaths).where(and(inArray(playerDeaths.encounterId, allEncounterIds), inArray(playerDeaths.playerGuid, allGuids))),
+			]);
 
 			const uptimeByEncGuid = new Map(
 				uptimes.map((u) => [`${u.encounterId}:${u.playerGuid}`, u]),
 			);
-
-			// Batch query consumable_uses
-			const consumables = await db
-				.select()
-				.from(consumableUses)
-				.where(
-					and(
-						inArray(consumableUses.encounterId, allEncounterIds),
-						inArray(consumableUses.playerGuid, allGuids),
-					),
-				);
 
 			// Group consumables by enc:guid
 			const consumablesByEncGuid = new Map<string, typeof consumables>();
@@ -225,68 +200,103 @@ export const membersRouter = createTRPCRouter({
 				consumablesByEncGuid.set(key, existing);
 			}
 
-			// Aggregate per raid
-			const raidResults = [...raidEncounterMap.entries()].map(
-				([raidId, raidData]) => {
+			// Stat card aggregates
+			const totalEncounters = playerEncounters.length;
+			const totalDps = totalEncounters > 0
+				? Math.round(
+						playerEncounters.reduce((sum, pe) => {
+							const dps = pe.durationMs > 0 ? (pe.damage / pe.durationMs) * 1000 : 0;
+							return sum + dps;
+						}, 0) / totalEncounters,
+					)
+				: 0;
+
+			const uniqueRaidIds = new Set(playerEncounters.map((pe) => pe.raidId));
+			const raidAttendance = uniqueRaidIds.size;
+
+			const encounterIdsWithPrePot = new Set<string>();
+			for (const c of consumables) {
+				if (c.prePot) {
+					encounterIdsWithPrePot.add(c.encounterId);
+				}
+			}
+			const prePotRate = totalEncounters > 0
+				? Math.round((encounterIdsWithPrePot.size / totalEncounters) * 100)
+				: 0;
+
+			const totalDeaths = deaths.length;
+
+			// DPS trend data
+			const dpsByDate = new Map<string, { totalDps: number; count: number }>();
+			for (const pe of playerEncounters) {
+				const dateKey = new Date(pe.raidDate).toISOString().split("T")[0];
+				const entry = dpsByDate.get(dateKey) ?? { totalDps: 0, count: 0 };
+				const dps = pe.durationMs > 0 ? (pe.damage / pe.durationMs) * 1000 : 0;
+				entry.totalDps += dps;
+				entry.count++;
+				dpsByDate.set(dateKey, entry);
+			}
+
+			const dpsTrend = [...dpsByDate.entries()]
+				.map(([date, { totalDps: total, count }]) => ({
+					date,
+					avgDps: Math.round(total / count),
+					encounters: count,
+				}))
+				.sort((a, b) => a.date.localeCompare(b.date));
+
+			// Heatmap data
+			const encountersByDate = new Map<string, { encounters: { encounterId: string; playerGuid: string; bossName: string }[] }>();
+			for (const pe of playerEncounters) {
+				const dateKey = new Date(pe.raidDate).toISOString().split("T")[0];
+				const entry = encountersByDate.get(dateKey) ?? { encounters: [] };
+				entry.encounters.push({ encounterId: pe.encounterId, playerGuid: pe.playerGuid, bossName: pe.bossName });
+				encountersByDate.set(dateKey, entry);
+			}
+
+			const heatmapData = [...encountersByDate.entries()]
+				.map(([date, { encounters: encs }]) => {
 					let flaskTotal = 0;
 					let foodTotal = 0;
 					let uptimeCount = 0;
-					let totalPots = 0;
-					let hasPrePot = false;
-					let totalEngi = 0;
-					const itemMap = new Map<string, { spellName: string; count: number; type: string }>();
+					let encountersWithConsumable = 0;
+					const consumablesByBoss: Record<string, { spellName: string; count: number; type: string; isPrePot: boolean }[]> = {};
 
-					for (const enc of raidData.encounters) {
+					for (const enc of encs) {
 						const key = `${enc.encounterId}:${enc.playerGuid}`;
-
 						const uptime = uptimeByEncGuid.get(key);
 						if (uptime) {
 							flaskTotal += uptime.flaskUptimePercent;
 							foodTotal += uptime.foodUptimePercent;
 							uptimeCount++;
 						}
-
 						const cons = consumablesByEncGuid.get(key) ?? [];
+						if (cons.length > 0) encountersWithConsumable++;
+						if (!consumablesByBoss[enc.bossName]) consumablesByBoss[enc.bossName] = [];
 						for (const c of cons) {
-							if (c.type === "potion" || c.type === "mana_potion") {
-								totalPots += c.count;
-								if (c.prePot) hasPrePot = true;
-							} else if (c.type === "engineering") {
-								totalEngi += c.count;
-							}
-							const existing = itemMap.get(c.spellName);
-							if (existing) {
-								existing.count += c.count;
-							} else {
-								itemMap.set(c.spellName, {
-									spellName: c.spellName,
-									count: c.count,
-									type: c.type,
-								});
-							}
+							consumablesByBoss[enc.bossName].push({ spellName: c.spellName, count: c.count, type: c.type, isPrePot: c.prePot });
 						}
 					}
 
 					return {
-						raidId,
-						raidName: raidData.raidName,
-						raidDate: raidData.raidDate,
+						date,
+						encounterCount: encs.length,
 						flaskUptime: uptimeCount > 0 ? Math.round(flaskTotal / uptimeCount) : null,
 						foodUptime: uptimeCount > 0 ? Math.round(foodTotal / uptimeCount) : null,
-						totalPots,
-						hasPrePot,
-						totalEngi,
-						consumableItems: [...itemMap.values()],
+						consumableCoverage: { covered: encountersWithConsumable, total: encs.length },
+						consumablesByBoss,
 					};
-				},
-			);
+				})
+				.sort((a, b) => b.date.localeCompare(a.date));
 
 			// Latest spec from most recent encounter
 			const latestSpec = playerEncounters[0]?.spec ?? member.spec;
 
 			return {
 				member: { ...member, latestSpec },
-				raids: raidResults,
+				stats: { avgDps: totalDps, raidAttendance, prePotRate, totalDeaths },
+				dpsTrend,
+				heatmapData,
 			};
 		}),
 });
