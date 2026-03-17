@@ -130,7 +130,7 @@ export function PlayerBreakdown({
 
 			<div className="overflow-hidden border border-border bg-card">
 				{/* Header */}
-				<div className="flex border-b border-border px-4 py-2.5 font-body text-3xs uppercase tracking-wider text-dimmed">
+				<div className="flex border-b border-border px-4 py-2.5 font-body text-2xs uppercase tracking-wider text-secondary">
 					<div className="w-8">#</div>
 					<div className="flex-[2]">Player</div>
 					<div className="flex-1">Class</div>
@@ -148,7 +148,7 @@ export function PlayerBreakdown({
 						<div className="flex-[2] text-primary">
 							{player.playerName}
 						</div>
-						<div className="flex flex-1 items-center gap-1.5">
+						<div className="flex flex-1 items-center gap-1.5 whitespace-nowrap">
 							{player.class && CLASS_ICONS[player.class] && (
 								<Image
 									src={CLASS_ICONS[player.class]}
