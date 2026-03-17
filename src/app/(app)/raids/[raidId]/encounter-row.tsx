@@ -64,7 +64,7 @@ export function EncounterRow({
 				<div className="flex-[1.5] text-accent">
 					{formatNumber(encounter.raidDps)}
 				</div>
-				<div className="flex-1 text-dimmed">
+				<div className="flex-1 text-secondary">
 					{formatEncounterDuration(encounter.durationMs)}
 				</div>
 				<div
@@ -89,7 +89,7 @@ export function EncounterRow({
 					>
 						<div className="flex-[3]">Attempt {idx + 1}</div>
 						<div className="flex-[1.5]">{formatNumber(wipe.raidDps)}</div>
-						<div className="flex-1 text-dimmed">
+						<div className="flex-1 text-secondary">
 							{formatEncounterDuration(wipe.durationMs)}
 						</div>
 						<div

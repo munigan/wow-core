@@ -138,7 +138,7 @@ export function PlayerBreakdown({
 
 	return (
 		<div className="flex flex-col gap-3">
-			<span className="font-body text-xs uppercase tracking-wider text-dimmed">
+			<span className="font-body text-xs uppercase tracking-wider text-secondary">
 				Per-Player Breakdown
 			</span>
 			<div className="flex items-center gap-2">
@@ -197,7 +197,7 @@ export function PlayerBreakdown({
 			<div className="overflow-hidden border border-border bg-card">
 				<table className="w-full font-body">
 					<thead>
-						<tr className="border-b border-border text-2xs uppercase tracking-wider text-secondary">
+						<tr className="border-b border-border text-2xs uppercase tracking-wider text-dimmed">
 							<th className="w-10 py-2.5 pl-4 text-left font-normal">#</th>
 							<th className="py-2.5 text-left font-normal">Player</th>
 							<th className="py-2.5 text-left font-normal">Class</th>
@@ -236,7 +236,7 @@ export function PlayerBreakdown({
 										</span>
 									</span>
 								</td>
-								<td className="py-2.5 font-semibold text-accent">
+								<td className="py-2.5 font-semibold text-primary">
 									{formatNumber(player.dps)}
 								</td>
 								<td className="py-2.5 text-secondary">

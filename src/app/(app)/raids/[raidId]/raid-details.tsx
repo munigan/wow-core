@@ -158,12 +158,12 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 
 			{/* Encounters Table */}
 			<div className="flex flex-col gap-3">
-				<span className="font-body text-xs uppercase tracking-wider text-dimmed">
+				<span className="font-body text-xs uppercase tracking-wider text-secondary">
 					Encounters / Bosses
 				</span>
 				<div className="overflow-hidden border border-border bg-card">
 					{/* Header row */}
-					<div className="flex border-b border-border px-4 py-2.5 font-body text-2xs uppercase tracking-wider text-secondary">
+					<div className="flex border-b border-border px-4 py-2.5 font-body text-2xs uppercase tracking-wider text-dimmed">
 						<div className="flex-[3]">Encounter</div>
 						<div className="flex-[1.5]">DPS</div>
 						<div className="flex-1">Duration</div>
