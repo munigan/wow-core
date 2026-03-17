@@ -123,7 +123,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
 						Raid DPS
 					</span>
-					<span className="font-heading text-2xl font-bold text-accent">
+					<span className="font-heading text-3xl font-bold text-accent">
 						{formatNumber(raidDps)}
 					</span>
 				</div>
@@ -131,7 +131,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
 						Duration
 					</span>
-					<span className="font-heading text-2xl font-bold text-primary">
+					<span className="font-heading text-3xl font-bold text-primary">
 						{formatDuration(raid.durationMs ?? 0)}
 					</span>
 				</div>
@@ -139,7 +139,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
 						Bosses
 					</span>
-					<span className="font-heading text-2xl font-bold text-primary">
+					<span className="font-heading text-3xl font-bold text-primary">
 						{uniqueBossKills}
 					</span>
 					<span className="font-body text-3xs text-dimmed">
@@ -150,7 +150,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
 						Players
 					</span>
-					<span className="font-heading text-2xl font-bold text-primary">
+					<span className="font-heading text-3xl font-bold text-primary">
 						{uniquePlayerCount}
 					</span>
 				</div>
