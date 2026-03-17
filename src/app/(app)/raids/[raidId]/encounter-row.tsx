@@ -63,7 +63,7 @@ export function EncounterRow({
 						)}
 					</span>
 				</td>
-				<td className="py-3 text-accent">
+				<td className="py-3 text-primary">
 					{formatNumber(encounter.raidDps)}
 				</td>
 				<td className="py-3 text-secondary">
