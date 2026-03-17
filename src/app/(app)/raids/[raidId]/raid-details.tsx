@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { trpc } from "@/lib/trpc/client";
 import { EncounterRow } from "./encounter-row";
 import { PlayerBreakdown } from "./player-breakdown";
@@ -25,9 +24,6 @@ function formatNumber(n: number): string {
 
 export function RaidDetails({ raidId }: RaidDetailsProps) {
 	const { data } = trpc.raids.getById.useQuery({ raidId });
-	const [selectedEncounterId, setSelectedEncounterId] = useState<
-		string | null
-	>(null);
 
 	if (!data) return null;
 
@@ -87,10 +83,6 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 		month: "2-digit",
 		day: "2-digit",
 	});
-
-	// Default selected encounter: first kill
-	const activeEncounterId =
-		selectedEncounterId ?? killEncounters[0]?.id ?? null;
 
 	return (
 		<div className="flex flex-col gap-8 p-8">
@@ -166,8 +158,6 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 							encounter={enc}
 							wipeCount={wipeCountByBoss.get(enc.bossName) ?? 0}
 							wipes={wipesByBoss.get(enc.bossName) ?? []}
-							isSelected={enc.id === activeEncounterId}
-							onSelect={() => setSelectedEncounterId(enc.id)}
 							formatNumber={formatNumber}
 						/>
 					))}
@@ -175,9 +165,9 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 			</div>
 
 			{/* Per-Player Breakdown */}
-			{activeEncounterId && (
+			{killEncounters.length > 0 && (
 				<PlayerBreakdown
-					encounterId={activeEncounterId}
+					encounters={killEncounters.map((e) => ({ id: e.id, bossName: e.bossName }))}
 					formatNumber={formatNumber}
 				/>
 			)}

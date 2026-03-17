@@ -18,8 +18,6 @@ type EncounterRowProps = {
 	encounter: EncounterData;
 	wipeCount: number;
 	wipes: EncounterData[];
-	isSelected: boolean;
-	onSelect: () => void;
 	formatNumber: (n: number) => string;
 };
 
@@ -34,8 +32,6 @@ export function EncounterRow({
 	encounter,
 	wipeCount,
 	wipes,
-	isSelected,
-	onSelect,
 	formatNumber,
 }: EncounterRowProps) {
 	const [isExpanded, setIsExpanded] = useState(false);
@@ -43,14 +39,10 @@ export function EncounterRow({
 
 	return (
 		<>
-			<button
-				type="button"
-				data-selected={isSelected || undefined}
-				className="flex w-full items-center border-b border-elevated px-4 py-3 text-left font-body text-sm transition-colors hover:bg-subtle data-selected:bg-accent-10"
-				onClick={() => {
-					onSelect();
-					if (hasWipes) setIsExpanded((prev) => !prev);
-				}}
+			<div
+				data-expandable={hasWipes || undefined}
+				className="flex w-full items-center border-b border-elevated px-4 py-3 font-body text-sm data-expandable:cursor-pointer data-expandable:hover:bg-subtle"
+				onClick={hasWipes ? () => setIsExpanded((prev) => !prev) : undefined}
 			>
 				<div className="flex flex-[3] items-center gap-2">
 					{hasWipes && (
@@ -86,7 +78,7 @@ export function EncounterRow({
 						Kill
 					</span>
 				</div>
-			</button>
+			</div>
 
 			{/* Expanded wipe sub-rows */}
 			{isExpanded &&

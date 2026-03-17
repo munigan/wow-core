@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { keepPreviousData } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import {
 	SelectItem,
@@ -71,20 +72,33 @@ function formatSpec(spec: string | null, playerClass: string | null): string | n
 	return specName.charAt(0).toUpperCase() + specName.slice(1);
 }
 
+type EncounterOption = {
+	id: string;
+	bossName: string;
+};
+
 type PlayerBreakdownProps = {
-	encounterId: string;
+	encounters: EncounterOption[];
 	formatNumber: (n: number) => string;
 };
 
 export function PlayerBreakdown({
-	encounterId,
+	encounters,
 	formatNumber,
 }: PlayerBreakdownProps) {
-	const { data, isLoading } = trpc.raids.getEncounterDetails.useQuery({
-		encounterId,
-	});
+	const [selectedEncounterId, setSelectedEncounterId] = useState<string>(
+		encounters[0]?.id ?? "",
+	);
 	const [roleFilter, setRoleFilter] = useState<string>("all");
 	const [classFilter, setClassFilter] = useState<string>("all");
+
+	const { data, isLoading } = trpc.raids.getEncounterDetails.useQuery(
+		{ encounterId: selectedEncounterId },
+		{
+			enabled: selectedEncounterId !== "",
+			placeholderData: keepPreviousData,
+		},
+	);
 
 	const filteredPlayers = useMemo(() => {
 		if (!data) return [];
@@ -112,38 +126,60 @@ export function PlayerBreakdown({
 
 	return (
 		<div className="flex flex-col gap-3">
-			<div className="flex items-center justify-between">
-				<span className="font-body text-xs uppercase tracking-wider text-dimmed">
-					Per-Player Breakdown
-				</span>
-				<div className="flex gap-2">
-					<SelectRoot
-						value={roleFilter}
-						onValueChangeAction={(v) => setRoleFilter(v ?? "all")}
-					>
-						<SelectTrigger placeholder="All Roles" size="sm" />
-						<SelectPopup>
-							<SelectItem value="all">All Roles</SelectItem>
-							<SelectItem value="tank">Tank</SelectItem>
-							<SelectItem value="healer">Healer</SelectItem>
-							<SelectItem value="dps">DPS</SelectItem>
-						</SelectPopup>
-					</SelectRoot>
-					<SelectRoot
-						value={classFilter}
-						onValueChangeAction={(v) => setClassFilter(v ?? "all")}
-					>
-						<SelectTrigger placeholder="All Classes" size="sm" />
-						<SelectPopup>
-							<SelectItem value="all">All Classes</SelectItem>
-							{uniqueClasses.map((cls) => (
-								<SelectItem key={cls} value={cls}>
-									{cls}
-								</SelectItem>
-							))}
-						</SelectPopup>
-					</SelectRoot>
-				</div>
+			<span className="font-body text-xs uppercase tracking-wider text-dimmed">
+				Per-Player Breakdown
+			</span>
+			<div className="flex items-center gap-2">
+				<SelectRoot
+					value={selectedEncounterId}
+					items={encounters.map((enc) => ({ value: enc.id, label: enc.bossName }))}
+					onValueChangeAction={(v) => setSelectedEncounterId(v ?? encounters[0]?.id ?? "")}
+				>
+					<SelectTrigger placeholder="Select Encounter" size="sm" />
+					<SelectPopup>
+						{encounters.map((enc) => (
+							<SelectItem key={enc.id} value={enc.id}>
+								{enc.bossName}
+							</SelectItem>
+						))}
+					</SelectPopup>
+				</SelectRoot>
+				<SelectRoot
+					value={roleFilter}
+					items={[
+						{ value: "all", label: "All Roles" },
+						{ value: "tank", label: "Tank" },
+						{ value: "healer", label: "Healer" },
+						{ value: "dps", label: "DPS" },
+					]}
+					onValueChangeAction={(v) => setRoleFilter(v ?? "all")}
+				>
+					<SelectTrigger placeholder="All Roles" size="sm" />
+					<SelectPopup>
+						<SelectItem value="all">All Roles</SelectItem>
+						<SelectItem value="tank">Tank</SelectItem>
+						<SelectItem value="healer">Healer</SelectItem>
+						<SelectItem value="dps">DPS</SelectItem>
+					</SelectPopup>
+				</SelectRoot>
+				<SelectRoot
+					value={classFilter}
+					items={[
+						{ value: "all", label: "All Classes" },
+						...uniqueClasses.map((cls) => ({ value: cls, label: cls })),
+					]}
+					onValueChangeAction={(v) => setClassFilter(v ?? "all")}
+				>
+					<SelectTrigger placeholder="All Classes" size="sm" />
+					<SelectPopup>
+						<SelectItem value="all">All Classes</SelectItem>
+						{uniqueClasses.map((cls) => (
+							<SelectItem key={cls} value={cls}>
+								{cls}
+							</SelectItem>
+						))}
+					</SelectPopup>
+				</SelectRoot>
 			</div>
 
 			<div className="overflow-hidden border border-border bg-card">
