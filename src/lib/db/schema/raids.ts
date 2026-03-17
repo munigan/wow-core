@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { cores } from "./cores";
 
 const timestamptz = () => timestamp({ withTimezone: true });
@@ -10,5 +10,7 @@ export const raids = pgTable("raids", {
 		.references(() => cores.id, { onDelete: "cascade" }),
 	name: text().notNull(),
 	date: timestamptz().notNull(),
+	raidInstance: text(),
+	durationMs: integer(),
 	createdAt: timestamptz().notNull().defaultNow(),
 });
