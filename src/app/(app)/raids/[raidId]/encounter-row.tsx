@@ -39,71 +39,72 @@ export function EncounterRow({
 
 	return (
 		<>
-			<div
+			<tr
 				data-expandable={hasWipes || undefined}
-				className="flex w-full items-center border-b border-elevated px-4 py-3 font-body text-sm data-expandable:cursor-pointer data-expandable:hover:bg-subtle"
+				className="border-b border-elevated text-sm data-expandable:cursor-pointer data-expandable:hover:bg-subtle"
 				onClick={hasWipes ? () => setIsExpanded((prev) => !prev) : undefined}
 			>
-				<div className="flex flex-[3] items-center gap-2">
-					{hasWipes && (
-						<span className="text-dimmed">
-							{isExpanded ? (
-								<ChevronDown className="size-3.5" />
-							) : (
-								<ChevronRight className="size-3.5" />
-							)}
-						</span>
-					)}
-					<span className="text-primary">{encounter.bossName}</span>
-					{hasWipes && (
-						<span className="text-2xs text-danger">
-							{wipeCount} {wipeCount === 1 ? "wipe" : "wipes"}
-						</span>
-					)}
-				</div>
-				<div className="flex-[1.5] text-accent">
+				<td className="py-3 pl-4">
+					<span className="flex items-center gap-2">
+						{hasWipes && (
+							<span className="text-dimmed">
+								{isExpanded ? (
+									<ChevronDown className="size-3.5" />
+								) : (
+									<ChevronRight className="size-3.5" />
+								)}
+							</span>
+						)}
+						<span className="text-primary">{encounter.bossName}</span>
+						{hasWipes && (
+							<span className="text-2xs text-danger">
+								{wipeCount} {wipeCount === 1 ? "wipe" : "wipes"}
+							</span>
+						)}
+					</span>
+				</td>
+				<td className="py-3 text-accent">
 					{formatNumber(encounter.raidDps)}
-				</div>
-				<div className="flex-1 text-secondary">
+				</td>
+				<td className="py-3 text-secondary">
 					{formatEncounterDuration(encounter.durationMs)}
-				</div>
-				<div
+				</td>
+				<td
 					data-has-deaths={encounter.deathCount > 0 || undefined}
-					className="flex-1 text-dimmed data-has-deaths:text-danger"
+					className="py-3 text-dimmed data-has-deaths:text-danger"
 				>
 					{encounter.deathCount}
-				</div>
-				<div className="flex-1">
+				</td>
+				<td className="py-3 pr-4">
 					<span className="bg-accent-20 px-2 py-0.5 text-3xs font-semibold uppercase text-accent">
 						Kill
 					</span>
-				</div>
-			</div>
+				</td>
+			</tr>
 
-			{/* Expanded wipe sub-rows */}
 			{isExpanded &&
 				wipes.map((wipe, idx) => (
-					<div
+					<tr
 						key={wipe.id}
-						className="flex items-center border-b border-elevated border-l-2 border-l-danger/40 bg-page px-4 py-2 pl-8 font-body text-xs text-secondary"
+						className="border-b border-elevated border-l-2 border-l-danger/40 bg-page text-xs text-secondary"
 					>
-						<div className="flex-[3]">Attempt {idx + 1}</div>
-						<div className="flex-[1.5]">{formatNumber(wipe.raidDps)}</div>
-						<div className="flex-1 text-secondary">
+						<td className="py-2 pl-8">Attempt {idx + 1}</td>
+						<td className="py-2">{formatNumber(wipe.raidDps)}</td>
+						<td className="py-2 text-secondary">
 							{formatEncounterDuration(wipe.durationMs)}
-						</div>
-						<div
+						</td>
+						<td
 							data-has-deaths={wipe.deathCount > 0 || undefined}
-							className="flex-1 text-dimmed data-has-deaths:text-danger"
+							className="py-2 text-dimmed data-has-deaths:text-danger"
 						>
 							{wipe.deathCount}
-						</div>
-						<div className="flex-1">
+						</td>
+						<td className="py-2 pr-4">
 							<span className="bg-danger-20 px-2 py-0.5 text-3xs font-semibold uppercase text-danger">
 								Wipe
 							</span>
-						</div>
-					</div>
+						</td>
+					</tr>
 				))}
 		</>
 	);

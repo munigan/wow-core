@@ -162,24 +162,28 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 					Encounters / Bosses
 				</span>
 				<div className="overflow-hidden border border-border bg-card">
-					{/* Header row */}
-					<div className="flex border-b border-border px-4 py-2.5 font-body text-2xs uppercase tracking-wider text-dimmed">
-						<div className="flex-[3]">Encounter</div>
-						<div className="flex-[1.5]">DPS</div>
-						<div className="flex-1">Duration</div>
-						<div className="flex-1">Deaths</div>
-						<div className="flex-1">Status</div>
-					</div>
-					{/* Kill rows */}
-					{killEncounters.map((enc) => (
-						<EncounterRow
-							key={enc.id}
-							encounter={enc}
-							wipeCount={wipeCountByBoss.get(enc.bossName) ?? 0}
-							wipes={wipesByBoss.get(enc.bossName) ?? []}
-							formatNumber={formatNumber}
-						/>
-					))}
+					<table className="w-full font-body">
+						<thead>
+							<tr className="border-b border-border text-2xs uppercase tracking-wider text-dimmed">
+								<th className="py-2.5 pl-4 text-left font-normal">Encounter</th>
+								<th className="w-28 py-2.5 text-left font-normal">DPS</th>
+								<th className="w-28 py-2.5 text-left font-normal">Duration</th>
+								<th className="w-24 py-2.5 text-left font-normal">Deaths</th>
+								<th className="w-24 py-2.5 pr-4 text-left font-normal">Status</th>
+							</tr>
+						</thead>
+						<tbody>
+							{killEncounters.map((enc) => (
+								<EncounterRow
+									key={enc.id}
+									encounter={enc}
+									wipeCount={wipeCountByBoss.get(enc.bossName) ?? 0}
+									wipes={wipesByBoss.get(enc.bossName) ?? []}
+									formatNumber={formatNumber}
+								/>
+							))}
+						</tbody>
+					</table>
 				</div>
 			</div>
 

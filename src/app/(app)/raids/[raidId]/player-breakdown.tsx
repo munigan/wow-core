@@ -201,9 +201,9 @@ export function PlayerBreakdown({
 							<th className="w-10 py-2.5 pl-4 text-left font-normal">#</th>
 							<th className="py-2.5 text-left font-normal">Player</th>
 							<th className="py-2.5 text-left font-normal">Class</th>
-							<th className="w-20 py-2.5 text-left font-normal">DPS</th>
-							<th className="w-20 py-2.5 text-left font-normal">Damage</th>
-							<th className="w-16 py-2.5 pr-4 text-left font-normal">Deaths</th>
+							<th className="w-28 py-2.5 text-left font-normal">DPS</th>
+							<th className="w-28 py-2.5 text-left font-normal">Damage</th>
+							<th className="w-24 py-2.5 pr-4 text-left font-normal">Deaths</th>
 						</tr>
 					</thead>
 					<tbody className="text-sm">
