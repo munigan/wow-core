@@ -80,7 +80,7 @@ export function EncounterRow({
 					{encounter.deathCount}
 				</div>
 				<div className="flex-1">
-					<span className="rounded bg-accent-20 px-2 py-0.5 text-3xs font-semibold uppercase text-accent">
+					<span className="bg-accent-20 px-2 py-0.5 text-3xs font-semibold uppercase text-accent">
 						Kill
 					</span>
 				</div>
@@ -104,7 +104,7 @@ export function EncounterRow({
 							{wipe.deathCount}
 						</div>
 						<div className="flex-1">
-							<span className="rounded bg-danger-20 px-2 py-0.5 text-3xs font-semibold uppercase text-danger">
+							<span className="bg-danger-20 px-2 py-0.5 text-3xs font-semibold uppercase text-danger">
 								Wipe
 							</span>
 						</div>

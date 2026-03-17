@@ -108,7 +108,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 
 			{/* Metric Cards */}
 			<div className="grid grid-cols-4 gap-3">
-				<div className="flex flex-col gap-1 rounded-lg border border-border bg-card p-4">
+				<div className="flex flex-col gap-1 border border-border bg-card p-4">
 					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
 						Raid DPS
 					</span>
@@ -116,7 +116,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 						{formatNumber(raidDps)}
 					</span>
 				</div>
-				<div className="flex flex-col gap-1 rounded-lg border border-border bg-card p-4">
+				<div className="flex flex-col gap-1 border border-border bg-card p-4">
 					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
 						Duration
 					</span>
@@ -124,7 +124,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 						{formatDuration(raid.durationMs ?? 0)}
 					</span>
 				</div>
-				<div className="flex flex-col gap-1 rounded-lg border border-border bg-card p-4">
+				<div className="flex flex-col gap-1 border border-border bg-card p-4">
 					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
 						Bosses
 					</span>
@@ -135,7 +135,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 						{difficultyText}
 					</span>
 				</div>
-				<div className="flex flex-col gap-1 rounded-lg border border-border bg-card p-4">
+				<div className="flex flex-col gap-1 border border-border bg-card p-4">
 					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
 						Players
 					</span>
@@ -150,7 +150,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 				<span className="font-body text-xs uppercase tracking-wider text-dimmed">
 					Encounters / Bosses
 				</span>
-				<div className="overflow-hidden rounded-lg border border-border bg-card">
+				<div className="overflow-hidden border border-border bg-card">
 					{/* Header row */}
 					<div className="flex border-b border-border px-4 py-2.5 font-body text-3xs uppercase tracking-wider text-dimmed">
 						<div className="flex-[3]">Encounter</div>

@@ -82,7 +82,7 @@ export function PlayerBreakdown({
 					<select
 						value={roleFilter}
 						onChange={(e) => setRoleFilter(e.target.value)}
-						className="rounded border border-border bg-elevated px-2 py-1 font-body text-2xs text-secondary"
+						className="border border-border bg-elevated px-2 py-1 font-body text-2xs text-secondary"
 					>
 						<option value="all">All Roles</option>
 						<option value="tank">Tank</option>
@@ -92,7 +92,7 @@ export function PlayerBreakdown({
 					<select
 						value={classFilter}
 						onChange={(e) => setClassFilter(e.target.value)}
-						className="rounded border border-border bg-elevated px-2 py-1 font-body text-2xs text-secondary capitalize"
+						className="border border-border bg-elevated px-2 py-1 font-body text-2xs text-secondary capitalize"
 					>
 						<option value="all">All Classes</option>
 						{uniqueClasses.map((cls) => (
@@ -104,7 +104,7 @@ export function PlayerBreakdown({
 				</div>
 			</div>
 
-			<div className="overflow-hidden rounded-lg border border-border bg-card">
+			<div className="overflow-hidden border border-border bg-card">
 				{/* Header */}
 				<div className="flex border-b border-border px-4 py-2.5 font-body text-3xs uppercase tracking-wider text-dimmed">
 					<div className="w-8">#</div>
