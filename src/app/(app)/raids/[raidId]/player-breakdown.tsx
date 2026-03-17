@@ -106,7 +106,7 @@ export function PlayerBreakdown({
 					<select
 						value={roleFilter}
 						onChange={(e) => setRoleFilter(e.target.value)}
-						className="border border-border bg-elevated px-2 py-1 font-body text-2xs text-secondary"
+						className="border border-border bg-elevated px-2 py-1 font-body text-sm text-secondary"
 					>
 						<option value="all">All Roles</option>
 						<option value="tank">Tank</option>
