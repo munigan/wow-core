@@ -35,7 +35,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 				</div>
 				<div className="grid grid-cols-4 gap-3">
 					{Array.from({ length: 4 }).map((_, i) => (
-						<Skeleton key={i} className="h-20 w-full" />
+						<Skeleton key={i} className="h-16 w-full" />
 					))}
 				</div>
 				<div className="flex flex-col gap-3">
@@ -83,18 +83,6 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 			: 0;
 
 	const uniqueBossKills = new Set(killEncounters.map((e) => e.bossName)).size;
-	const difficulties = killEncounters.reduce(
-		(acc, e) => {
-			const diff = e.difficulty ?? "N/C";
-			acc.set(diff, (acc.get(diff) ?? 0) + 1);
-			return acc;
-		},
-		new Map<string, number>(),
-	);
-	const difficultyText = [...difficulties.entries()]
-		.map(([diff, count]) => `${count}x ${diff}`)
-		.join(", ");
-
 	const uniquePlayerCount = data.uniquePlayerCount;
 
 	const raidDateStr = new Date(raid.date).toLocaleDateString("en-US", {
@@ -141,9 +129,6 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 					</span>
 					<span className="font-heading text-3xl font-bold text-primary">
 						{uniqueBossKills}
-					</span>
-					<span className="font-body text-3xs text-dimmed">
-						{difficultyText}
 					</span>
 				</div>
 				<div className="flex flex-col gap-1 border border-border bg-card p-4">
