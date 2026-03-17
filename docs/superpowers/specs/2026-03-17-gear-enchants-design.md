@@ -32,6 +32,8 @@ rel="item=49623&ench=3368&gems=3552:3552:3552&transmog=22691"
 ### Items
 Resolved via the existing Wowhead tooltip API: `https://nether.wowhead.com/wotlk/tooltip/item/{id}`. Returns JSON with `name`, `quality` (0-7), `icon`, and `tooltip` (HTML). Already used in the project (`src/components/item-tooltip.tsx`).
 
+**Item level parsing:** Extract from Wowhead tooltip HTML using regex: `/Item Level (\d+)/`. The tooltip field contains a string like `"...Item Level 277..."`.
+
 ### Enchants & Gems
 The enchant entry IDs from the `rel` attribute (e.g., `ench=3368`, `gems=3552`) are NOT item IDs or spell IDs — they are a separate WoW ID space. Wowhead has no tooltip endpoint for these. **Resolution: static lookup map.**
 
@@ -57,11 +59,13 @@ const GEM_MAP: Record<number, { name: string; color: "red" | "blue" | "yellow" |
 
 These maps live in `src/lib/wow-data/enchants.ts` and `src/lib/wow-data/gems.ts`. If an ID is not found in the map, display "Unknown Enchant" / "Unknown Gem" as a fallback.
 
+**Note:** These are external API utility files, not Drizzle DB queries. The project rule "keep DB queries inline" applies only to Drizzle ORM queries, not to external API fetching or static data maps.
+
 ## Caching Strategy
 
 ### Next.js 16 Cache Components
 
-**Custom cache profile** in `next.config.ts`:
+**Config changes** in `next.config.ts`:
 
 ```ts
 cacheComponents: true,
@@ -74,23 +78,35 @@ cacheLife: {
 }
 ```
 
+**Note:** `"use cache"` works in any async function on the server, including functions called from API route handlers and tRPC procedures. Verified in Next.js 16 docs — a Route Handler `GET` function can call a `"use cache"` function and the cache is respected.
+
 **Cached functions:**
 
-1. `fetchArmoryGear(name, realm)` — fetches and parses the Warmane HTML. Marked with `"use cache"`, `cacheLife('armory')`, `cacheTag('armory-gear', name)`. Returns parsed gear array with item/enchant/gem IDs and professions.
+1. `fetchArmoryGear(name, realm)` — fetches and parses the Warmane HTML. Marked with `"use cache"`, `cacheLife('armory')`, `cacheTag('armory-gear', name)`. Returns parsed gear array with item/enchant/gem IDs, quality numbers, and professions.
 
 2. `fetchItemTooltip(itemId)` — fetches item data from Wowhead. Marked with `"use cache"`, `cacheLife('max')` (infinite — item data never changes). Returns `{ name, quality, icon, tooltip }`.
 
 ### Data Flow
 
 ```
-Page load → tRPC gear.getByMember(memberName)
+Page load → tRPC gear.getByMember(memberId)
   → fetchArmoryGear(name, realm)  [cached 24h]
     → HTTP GET armory.warmane.com/character/{name}/{realm}/summary
-    → Parse rel attributes → extract item/ench/gem IDs
-    → For each item: fetchItemTooltip(itemId) [cached forever]
-    → Resolve ench/gem IDs via static maps
+    → Parse rel attributes → extract item/ench/gem IDs + quality from CSS class
+    → Return raw parsed data (no Wowhead calls here)
+  → Promise.all: fetchItemTooltip(itemId) for all items [cached forever, parallel]
+  → Resolve ench/gem IDs via static maps
+  → Generate actionable notes
   → Return structured gear data to client
 ```
+
+**Parallelization:** All Wowhead tooltip fetches (up to 16 items) run in parallel via `Promise.all`. The armory fetch returns raw IDs, and the tRPC procedure resolves them concurrently.
+
+### Error Handling
+
+- **Character not found** (armory returns 404 or "does not exist" text): Return `{ error: "CHARACTER_NOT_FOUND" }`. UI shows "Character not found on Warmane armory".
+- **Armory unavailable** (network error, 500, timeout): Return `{ error: "ARMORY_UNAVAILABLE" }`. UI shows "Warmane armory is currently unavailable. Try again later."
+- **Wowhead tooltip fails** for a single item: Use fallback `{ name: "Unknown Item", quality: 0 }`. Don't fail the whole page.
 
 ## tRPC Procedure
 
@@ -101,8 +117,8 @@ Page load → tRPC gear.getByMember(memberName)
 **Logic:**
 1. Fetch member by ID (get `name` from `members` table)
 2. Fetch core by `coreId` (get `realm` from `cores` table)
-3. Call `fetchArmoryGear(name, realm)`
-4. For each gear slot, call `fetchItemTooltip(itemId)` to get item name/quality
+3. Call `fetchArmoryGear(name, realm)` — returns raw parsed slots with IDs
+4. `Promise.all`: call `fetchItemTooltip(itemId)` for each slot to get item name/quality/ilvl
 5. Resolve enchant and gem IDs via static maps
 6. Generate actionable notes (missing enchants, empty sockets)
 
@@ -116,15 +132,15 @@ Page load → tRPC gear.getByMember(memberName)
     itemId: number,
     itemName: string,
     itemQuality: number,        // 0-7
-    itemLevel: number,          // parsed from Wowhead tooltip HTML
+    itemLevel: number,          // parsed from Wowhead tooltip HTML via /Item Level (\d+)/
     itemIcon: string,
     enchant: string | null,     // resolved enchant name or null
     gems: {
       name: string | null,      // resolved gem name or null (null = empty socket)
       color: string,
     }[],
-    hasAllEnchants: boolean,
-    hasAllGems: boolean,
+    isEnchantable: boolean,     // whether this slot can have an enchant
+    hasAllGems: boolean,        // true if no empty sockets (or no sockets at all)
   }[],
   professions: {
     name: string,
@@ -145,7 +161,7 @@ Page load → tRPC gear.getByMember(memberName)
 Already in the sidebar navigation. Server component page with tRPC prefetch, client component for interactivity.
 
 ### Filter Row
-- **Member dropdown** — `Select` component listing all core members. Default: first member alphabetically. URL param via `nuqs` for shareable links.
+- **Member dropdown** — `Select` component listing all core members. Populated via existing `members.list` tRPC query (already defined in the members router). Default: first member alphabetically. URL param via `nuqs` for shareable links (`?member={memberId}`).
 - **"View Armory" button** — `ButtonSecondary` with external-link icon, opens `armory.warmane.com/character/{name}/{realm}/summary` in new tab.
 
 ### Gear Table
@@ -154,31 +170,35 @@ Already in the sidebar navigation. Server component page with tRPC prefetch, cli
 - **Slot** column: uppercase text (HEAD, NECK, etc.)
 - **Item** column: item name colored by quality (uses existing WoW quality-to-color mapping). Wrapped in `ItemTooltip` component for hover details.
 - **iLvl** column: item level number
-- **Enchanted** column: Badge `success` with `[YES]` if enchanted, Badge `error` with `[NO]` if enchantable slot has no enchant. Tooltip on hover shows enchant name.
-- **Gemmed** column: Badge `success` with `[YES]` if all sockets filled, Badge `error` with `[NO]` if has empty sockets. No badge if item has no sockets.
+- **Enchanted** column: Badge `success` variant with `[YES]` if enchanted, Badge `error` variant with `[NO]` if enchantable slot has no enchant. No badge for non-enchantable slots. Tooltip on hover shows enchant name. Badge component already uses `tailwind-variants` for variant styling.
+- **Gemmed** column: Badge `success` variant with `[YES]` if all sockets filled, Badge `error` variant with `[NO]` if has empty sockets. No badge if item has no sockets.
 - **Excluded slots:** Tabard and Shirt are not shown (not enchantable/gemmable).
 
 ### Actionable Notes Section
 - Card with header `// ACTIONABLE NOTES` and "Copy to Send" button
 - Auto-generated from gear data:
-  - `error` (red): Missing enchant on enchantable slot
-  - `warning` (orange): Empty gem socket
-  - `info` (gray): Profession recommendations (e.g., "Consider Engineering for Hyperspeed Accelerators")
+  - `error` (red): Missing enchant on enchantable slot — "Missing enchant on {Slot} ({Item Name})"
+  - `warning` (orange): Empty gem socket — "Empty gem socket in {Slot} ({Item Name})"
 - Each note has an icon (triangle-alert for error/warning, info for info) + colored text
-- "Copy to Send" copies all notes as plain text to clipboard
+- "Copy to Send" copies all notes as plain text to clipboard, format:
+  ```
+  Missing enchant on Weapon (Shadowmourne)
+  Empty gem socket in Ring 1 (Ashen Band of Endless Might)
+  ```
 
 ### Professions Section
 - Card with header `// PROFESSIONS`, fixed 320px width, beside the notes section
-- Each profession: icon + name + level string (e.g., "Engineering — 435/450")
-- Badge: `[MAX]` in green if at max level
+- Each profession: name + level string (e.g., "Engineering — 435/450"), no icons (text-only)
+- Badge: `[MAX]` success variant if at max level (450/450)
 
 ### Loading Skeleton
 - Skeleton for filter row
 - Skeleton for table (header + 16 rows)
 - Skeleton for notes and professions cards
 
-### Empty State
-- If member has no armory data (character not found): "Character not found on Warmane armory" in secondary text
+### Empty/Error States
+- Character not found: "Character not found on Warmane armory" in dimmed text
+- Armory unavailable: "Warmane armory is currently unavailable. Try again later." in dimmed text
 
 ## Enchantable Slots
 
@@ -186,7 +206,7 @@ Not all gear slots can have enchants. The enchantable slots in WotLK are:
 
 Head, Shoulders, Back, Chest, Wrist, Hands, Legs, Feet, MainHand, OffHand (if weapon), Ring1, Ring2 (if enchanter)
 
-Neck, Trinket1, Trinket2 are never enchantable. The "Enchanted" badge should only show `[NO]` for enchantable slots — non-enchantable slots show no badge.
+Neck, Trinket1, Trinket2 are never enchantable. Waist is not traditionally enchantable (Belt Buckle adds a socket, not an enchant — tracked via gem status instead). The "Enchanted" badge should only show `[NO]` for enchantable slots — non-enchantable slots show no badge.
 
 ## File Map
 
