@@ -5,10 +5,8 @@ import { fetchArmoryGear } from "@/lib/armory";
 import { db } from "@/lib/db";
 import { cores } from "@/lib/db/schema/cores";
 import { members } from "@/lib/db/schema/members";
+import { QUALITY_NAME_TO_NUMBER } from "@/lib/wow-data/constants";
 import { createTRPCRouter, protectedProcedure } from "@/lib/trpc/init";
-import { ENCHANT_MAP } from "@/lib/wow-data/enchants";
-import { GEM_MAP } from "@/lib/wow-data/gems";
-import { fetchItemData } from "@/lib/wow-data/items";
 
 const ENCHANTABLE_SLOTS = new Set([
 	"Head",
@@ -73,55 +71,22 @@ export const gearRouter = createTRPCRouter({
 				};
 			}
 
-			// Resolve all item IDs in parallel
-			const itemDataMap = new Map<
-				number,
-				Awaited<ReturnType<typeof fetchItemData>>
-			>();
-			const uniqueItemIds = [
-				...new Set(armoryResult.gear.map((g) => g.itemId)),
-			];
-			const itemResults = await Promise.all(
-				uniqueItemIds.map((id) => fetchItemData(id)),
-			);
-			for (const item of itemResults) {
-				itemDataMap.set(item.itemId, item);
-			}
-
-			// Build gear response with resolved names
+			// Build gear response — data is already resolved by crawl4ai
 			const gear = armoryResult.gear.map((slot) => {
-				const item = itemDataMap.get(slot.itemId);
 				const isEnchantable = ENCHANTABLE_SLOTS.has(slot.slot);
-				const enchant = slot.enchantId
-					? (ENCHANT_MAP[slot.enchantId] ??
-						`Unknown Enchant (${slot.enchantId})`)
-					: null;
-
-				const gems = slot.gemIds
-					.filter((id) => id !== 0)
-					.map((id) => {
-						const gem = GEM_MAP[id];
-						return gem
-							? { name: gem.name, color: gem.color }
-							: {
-									name: `Unknown Gem (${id})`,
-									color: "prismatic" as const,
-								};
-					});
-
-				const hasEmptySocket = slot.gemIds.some((id) => id === 0);
+				const qualityNumber =
+					QUALITY_NAME_TO_NUMBER[slot.quality.toLowerCase()] ?? 0;
 
 				return {
 					slot: slot.slot,
 					itemId: slot.itemId,
-					itemName: item?.name ?? "Unknown Item",
-					itemQuality: item?.quality ?? slot.quality,
-					itemLevel: item?.itemLevel ?? 0,
-					itemIcon: item?.icon ?? "",
-					enchant,
-					gems,
+					itemName: slot.itemName,
+					itemLevel: slot.itemLevel,
+					itemQuality: qualityNumber,
+					enchant: slot.enchant,
+					gems: slot.gems.map((name) => ({ name })),
 					isEnchantable,
-					hasAllGems: !hasEmptySocket || slot.gemIds.length === 0,
+					hasAllGems: slot.gems.length >= slot.totalSockets,
 				};
 			});
 
