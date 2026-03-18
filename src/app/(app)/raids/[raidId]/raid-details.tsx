@@ -9,25 +9,25 @@ import { trpc } from "@/lib/trpc/client";
 import { EncounterRow } from "./encounter-row";
 import { PlayerBreakdown } from "./player-breakdown";
 
-function MetricChange({
-	current,
-	average,
-	higherIsBetter,
-}: {
-	current: number;
-	average: number;
-	higherIsBetter: boolean;
-}) {
+function getMetricPct(current: number, average: number): number | null {
 	if (average === 0) return null;
-	const pct = ((current - average) / average) * 100;
+	return ((current - average) / average) * 100;
+}
+
+function getValueColor(pct: number | null, higherIsBetter: boolean): string {
+	if (pct === null) return "text-primary";
+	const goodPct = higherIsBetter ? pct : -pct;
+	if (goodPct >= 5) return "text-accent";
+	if (goodPct >= -5) return "text-warning";
+	return "text-danger";
+}
+
+function MetricChange({ pct }: { pct: number | null }) {
+	if (pct === null) return null;
 	const isPositive = pct > 0;
-	const isGood = higherIsBetter ? isPositive : !isPositive;
 
 	return (
-		<span
-			data-good={isGood || undefined}
-			className="flex items-center gap-1 text-danger data-good:text-accent"
-		>
+		<span className="flex items-center gap-1 text-dimmed">
 			{isPositive ? (
 				<TrendingUp className="size-3" />
 			) : (
@@ -173,68 +173,67 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 			</div>
 
 			{/* Metric Cards */}
-			<div className="grid grid-cols-4 gap-3">
-				<div className="flex flex-col gap-2 border border-border bg-card p-4">
-					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
-						Raid DPS
-					</span>
-					<span className="font-heading text-3xl font-bold text-accent">
-						{formatNumber(raidDps)}
-					</span>
-					{showAvg && (
-						<MetricChange
-							current={raidDps}
-							average={avgData.avgDps}
-							higherIsBetter
-						/>
-					)}
-				</div>
-				<div className="flex flex-col gap-2 border border-border bg-card p-4">
-					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
-						Duration
-					</span>
-					<span className="font-heading text-3xl font-bold text-primary">
-						{formatDuration(raid.durationMs ?? 0)}
-					</span>
-					{showAvg && (
-						<MetricChange
-							current={raid.durationMs ?? 0}
-							average={avgData.avgDurationMs}
-							higherIsBetter={false}
-						/>
-					)}
-				</div>
-				<div className="flex flex-col gap-2 border border-border bg-card p-4">
-					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
-						Consumables
-					</span>
-					<span className="font-heading text-3xl font-bold text-primary">
-						{data.totalConsumables}
-					</span>
-					{showAvg && (
-						<MetricChange
-							current={data.totalConsumables}
-							average={avgData.avgConsumables}
-							higherIsBetter
-						/>
-					)}
-				</div>
-				<div className="flex flex-col gap-2 border border-border bg-card p-4">
-					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
-						Deaths
-					</span>
-					<span className="font-heading text-3xl font-bold text-primary">
-						{data.totalDeaths}
-					</span>
-					{showAvg && (
-						<MetricChange
-							current={data.totalDeaths}
-							average={avgData.avgDeaths}
-							higherIsBetter={false}
-						/>
-					)}
-				</div>
-			</div>
+			{(() => {
+				const dpsPct = showAvg ? getMetricPct(raidDps, avgData.avgDps) : null;
+				const durPct = showAvg
+					? getMetricPct(raid.durationMs ?? 0, avgData.avgDurationMs)
+					: null;
+				const consPct = showAvg
+					? getMetricPct(data.totalConsumables, avgData.avgConsumables)
+					: null;
+				const deathPct = showAvg
+					? getMetricPct(data.totalDeaths, avgData.avgDeaths)
+					: null;
+
+				return (
+					<div className="grid grid-cols-4 gap-3">
+						<div className="flex flex-col gap-2 border border-border bg-card p-4">
+							<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
+								Raid DPS
+							</span>
+							<span
+								className={`font-heading text-3xl font-bold ${getValueColor(dpsPct, true)}`}
+							>
+								{formatNumber(raidDps)}
+							</span>
+							<MetricChange pct={dpsPct} />
+						</div>
+						<div className="flex flex-col gap-2 border border-border bg-card p-4">
+							<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
+								Duration
+							</span>
+							<span
+								className={`font-heading text-3xl font-bold ${getValueColor(durPct, false)}`}
+							>
+								{formatDuration(raid.durationMs ?? 0)}
+							</span>
+							<MetricChange pct={durPct} />
+						</div>
+						<div className="flex flex-col gap-2 border border-border bg-card p-4">
+							<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
+								Consumables
+							</span>
+							<span
+								className={`font-heading text-3xl font-bold ${getValueColor(consPct, true)}`}
+							>
+								{data.totalConsumables}
+							</span>
+							<MetricChange pct={consPct} />
+						</div>
+						<div className="flex flex-col gap-2 border border-border bg-card p-4">
+							<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
+								Deaths
+							</span>
+							<span
+								className={`font-heading text-3xl font-bold ${getValueColor(deathPct, false)}`}
+							>
+								{data.totalDeaths}
+							</span>
+							<MetricChange pct={deathPct} />
+						</div>
+					</div>
+				);
+			})()}
 
 			{/* Encounters Table */}
 			<div className="flex flex-col gap-3">

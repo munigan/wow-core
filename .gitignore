@@ -31,6 +31,9 @@
 .playwright-mcp/
 .superpowers/
 
+# combat logs
+example-logs/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
