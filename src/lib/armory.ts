@@ -66,49 +66,52 @@ export async function fetchArmoryGear(
 function parseGearFromHtml(html: string): RawGearSlot[] {
 	const gear: RawGearSlot[] = [];
 
-	// Match all icon-quality elements with their item links
-	// Pattern: <div class="icon-quality icon-qualityN"><a ... rel="item=XXX&ench=YYY&gems=Z:Z:Z">
-	const itemPattern =
-		/class="icon-quality(?:\s+icon-quality(\d+))?(?:\s+tooltip)?"[^>]*>\s*<a[^>]*rel="([^"]*)"[^>]*>/g;
+	// Match ALL icon-quality div elements (including empty slots) to keep slot index in sync.
+	// Each slot has: <div class="icon-quality ..."><a ...>
+	// Empty slots: class="icon-quality tooltip", <a href="#self"> (no rel)
+	// Equipped slots: class="icon-quality icon-qualityN", <a rel="item=...">
+	const slotPattern = /class="icon-quality[^"]*"[^>]*>/g;
 
-	let match: RegExpExecArray | null;
+	let slotMatch: RegExpExecArray | null;
 	let slotIndex = 0;
 
-	match = itemPattern.exec(html);
-	while (match !== null) {
-		const quality = match[1] ? Number.parseInt(match[1], 10) : 0;
-		const rel = match[2];
-
-		if (!rel || !rel.startsWith("item=")) {
-			slotIndex++;
-			match = itemPattern.exec(html);
-			continue;
-		}
-
-		const params = new URLSearchParams(rel);
-		const itemId = Number.parseInt(params.get("item") ?? "0", 10);
-		const enchantId = params.get("ench")
-			? Number.parseInt(params.get("ench") as string, 10)
-			: null;
-		const gemIds = (params.get("gems") ?? "")
-			.split(":")
-			.map((g) => Number.parseInt(g, 10))
-			.filter((g) => !Number.isNaN(g));
-
+	slotMatch = slotPattern.exec(html);
+	while (slotMatch !== null) {
 		const slotName = SLOT_NAMES[slotIndex] ?? `Slot ${slotIndex}`;
 
-		if (!EXCLUDED_SLOTS.has(slotName) && itemId > 0) {
-			gear.push({
-				slot: slotName,
-				itemId,
-				quality,
-				enchantId,
-				gemIds,
-			});
+		// Extract quality from class name
+		const qualityMatch = slotMatch[0].match(/icon-quality(\d+)/);
+		const quality = qualityMatch ? Number.parseInt(qualityMatch[1], 10) : 0;
+
+		// Look ahead for the rel attribute in the next <a> tag
+		const remaining = html.substring(slotMatch.index, slotMatch.index + 500);
+		const relMatch = remaining.match(/rel="([^"]*)"/);
+		const rel = relMatch?.[1];
+
+		if (rel && rel.startsWith("item=") && !EXCLUDED_SLOTS.has(slotName)) {
+			const params = new URLSearchParams(rel);
+			const itemId = Number.parseInt(params.get("item") ?? "0", 10);
+			const enchantId = params.get("ench")
+				? Number.parseInt(params.get("ench") as string, 10)
+				: null;
+			const gemIds = (params.get("gems") ?? "")
+				.split(":")
+				.map((g) => Number.parseInt(g, 10))
+				.filter((g) => !Number.isNaN(g));
+
+			if (itemId > 0) {
+				gear.push({
+					slot: slotName,
+					itemId,
+					quality,
+					enchantId,
+					gemIds,
+				});
+			}
 		}
 
 		slotIndex++;
-		match = itemPattern.exec(html);
+		slotMatch = slotPattern.exec(html);
 	}
 
 	return gear;

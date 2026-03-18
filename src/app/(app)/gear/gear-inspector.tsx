@@ -77,6 +77,7 @@ export function GearInspector({ realm }: GearInspectorProps) {
 				<SelectRoot
 					value={selectedMemberId}
 					onValueChangeAction={(val) => setMemberId(val ?? "")}
+					items={memberList?.map((m) => ({ value: m.id, label: m.name }))}
 				>
 					<SelectTrigger placeholder="Select member" />
 					<SelectPopup>
