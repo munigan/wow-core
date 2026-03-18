@@ -4,6 +4,7 @@ import { buffUptimes } from "@/lib/db/schema/buff-uptimes";
 import { consumableUses } from "@/lib/db/schema/consumable-uses";
 import { encounterPlayers } from "@/lib/db/schema/encounter-players";
 import { encounters } from "@/lib/db/schema/encounters";
+import { members } from "@/lib/db/schema/members";
 import { playerDeaths } from "@/lib/db/schema/player-deaths";
 import { raids } from "@/lib/db/schema/raids";
 import { createTRPCRouter, protectedProcedure } from "@/lib/trpc/init";
@@ -140,5 +141,94 @@ export const overviewRouter = createTRPCRouter({
 		]);
 
 		return { current, previous };
+	}),
+
+	getAttendance: protectedProcedure.query(async ({ ctx }) => {
+		const { now, currentStart } = getTimeWindows();
+
+		// All raids in 8-week window
+		const periodRaids = await db
+			.select({ id: raids.id, date: raids.date })
+			.from(raids)
+			.where(and(eq(raids.coreId, ctx.coreId), gte(raids.date, currentStart)));
+
+		const totalRaids = periodRaids.length;
+		const raidIds = periodRaids.map((r) => r.id);
+
+		const startDate = currentStart;
+		const endDate = now;
+
+		// All roster members for this core
+		const rosterMembers = await db
+			.select({
+				id: members.id,
+				name: members.name,
+				class: members.class,
+				spec: members.spec,
+			})
+			.from(members)
+			.where(eq(members.coreId, ctx.coreId));
+
+		if (totalRaids === 0 || rosterMembers.length === 0) {
+			return {
+				totalRaids,
+				startDate,
+				endDate,
+				members: rosterMembers.map((m) => ({
+					memberId: m.id,
+					name: m.name,
+					class: m.class,
+					spec: m.spec,
+					raidsAttended: 0,
+					attendanceRate: 0,
+					lastSeenDate: null as Date | null,
+				})),
+			};
+		}
+
+		// Join encounterPlayers -> encounters -> raids to get distinct raidIds per playerName
+		const attendanceRows = await db
+			.select({
+				playerName: encounterPlayers.playerName,
+				raidId: encounters.raidId,
+				raidDate: raids.date,
+			})
+			.from(encounterPlayers)
+			.innerJoin(encounters, eq(encounterPlayers.encounterId, encounters.id))
+			.innerJoin(raids, eq(encounters.raidId, raids.id))
+			.where(inArray(encounters.raidId, raidIds));
+
+		// Aggregate per playerName: distinct raidIds and max date
+		const attendanceByName = new Map<string, { raidIds: Set<string>; lastSeenDate: Date }>();
+		for (const row of attendanceRows) {
+			const existing = attendanceByName.get(row.playerName) ?? {
+				raidIds: new Set<string>(),
+				lastSeenDate: row.raidDate,
+			};
+			existing.raidIds.add(row.raidId);
+			if (row.raidDate > existing.lastSeenDate) {
+				existing.lastSeenDate = row.raidDate;
+			}
+			attendanceByName.set(row.playerName, existing);
+		}
+
+		const memberStats = rosterMembers
+			.map((m) => {
+				const att = attendanceByName.get(m.name);
+				const raidsAttended = att?.raidIds.size ?? 0;
+				const attendanceRate = totalRaids > 0 ? (raidsAttended / totalRaids) * 100 : 0;
+				return {
+					memberId: m.id,
+					name: m.name,
+					class: m.class,
+					spec: m.spec,
+					raidsAttended,
+					attendanceRate,
+					lastSeenDate: att?.lastSeenDate ?? null,
+				};
+			})
+			.sort((a, b) => b.attendanceRate - a.attendanceRate);
+
+		return { totalRaids, startDate, endDate, members: memberStats };
 	}),
 });
