@@ -36,7 +36,8 @@ export async function fetchArmoryGear(
 	cacheTag("armory-gear", name);
 
 	try {
-		const url = `https://armory.warmane.com/character/${encodeURIComponent(name)}/${encodeURIComponent(realm)}/summary`;
+		const capitalizedRealm = realm.charAt(0).toUpperCase() + realm.slice(1).toLowerCase();
+		const url = `https://armory.warmane.com/character/${encodeURIComponent(name)}/${encodeURIComponent(capitalizedRealm)}/summary`;
 		const res = await fetch(url, {
 			headers: { "User-Agent": "WowRaidTools/1.0" },
 		});
