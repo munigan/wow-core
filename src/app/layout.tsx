@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
@@ -31,7 +32,9 @@ export default function RootLayout({
 			<body
 				className={`${spaceGrotesk.variable} ${jetbrainsMono.variable} font-body antialiased`}
 			>
-				<Providers>{children}</Providers>
+				<Providers>
+					<Suspense>{children}</Suspense>
+				</Providers>
 			</body>
 		</html>
 	);

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { HydrateClient, trpc } from "@/lib/trpc/server";
 import { MemberDetails } from "./member-details";
 
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
 export default async function MemberDetailPage({
 	params,
 }: MemberDetailPageProps) {
+	await connection();
 	const { memberId } = await params;
 	void trpc.members.getById.prefetch({ memberId });
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { HydrateClient, trpc } from "@/lib/trpc/server";
 import { RaidDetails } from "./raid-details";
 
@@ -11,6 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default async function RaidDetailPage({ params }: RaidDetailPageProps) {
+	await connection();
 	const { raidId } = await params;
 	void trpc.raids.getById.prefetch({ raidId });
 
