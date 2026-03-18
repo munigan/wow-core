@@ -86,7 +86,8 @@ function parseGearFromHtml(html: string): RawGearSlot[] {
 		// Look ahead for the rel attribute in the next <a> tag
 		const remaining = html.substring(slotMatch.index, slotMatch.index + 500);
 		const relMatch = remaining.match(/rel="([^"]*)"/);
-		const rel = relMatch?.[1];
+		// Decode HTML entities — raw HTML has &amp; instead of &
+		const rel = relMatch?.[1]?.replaceAll("&amp;", "&");
 
 		if (rel && rel.startsWith("item=") && !EXCLUDED_SLOTS.has(slotName)) {
 			const params = new URLSearchParams(rel);
