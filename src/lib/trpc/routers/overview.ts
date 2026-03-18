@@ -459,4 +459,270 @@ export const overviewRouter = createTRPCRouter({
 
 		return { byPlayer, byRaid };
 	}),
+
+	getDeathsAndPerformance: protectedProcedure.query(async ({ ctx }) => {
+		const { currentStart } = getTimeWindows();
+
+		// Raids in window
+		const periodRaids = await db
+			.select({ id: raids.id, date: raids.date, name: raids.name })
+			.from(raids)
+			.where(and(eq(raids.coreId, ctx.coreId), gte(raids.date, currentStart)));
+
+		if (periodRaids.length === 0) {
+			return { deathsByPlayer: [], performanceTrend: [], attentionNeeded: [] };
+		}
+
+		const raidIds = periodRaids.map((r) => r.id);
+		const raidDateMap = new Map(periodRaids.map((r) => [r.id, r.date]));
+		const raidNameMap = new Map(periodRaids.map((r) => [r.id, r.name]));
+
+		// All encounters for these raids
+		const encounterRows = await db
+			.select({
+				id: encounters.id,
+				raidId: encounters.raidId,
+				durationMs: encounters.durationMs,
+				result: encounters.result,
+			})
+			.from(encounters)
+			.where(inArray(encounters.raidId, raidIds));
+
+		const encounterIds = encounterRows.map((e) => e.id);
+		if (encounterIds.length === 0) {
+			return { deathsByPlayer: [], performanceTrend: [], attentionNeeded: [] };
+		}
+
+		const encounterToRaid = new Map(encounterRows.map((e) => [e.id, e.raidId]));
+		const killEncounters = encounterRows.filter((e) => e.result === "kill");
+		const killEncounterIds = killEncounters.map((e) => e.id);
+
+		// -- deathsByPlayer --
+		const deathRows = await db
+			.select({
+				playerName: playerDeaths.playerName,
+				encounterId: playerDeaths.encounterId,
+				killingBlow: playerDeaths.killingBlow,
+			})
+			.from(playerDeaths)
+			.where(inArray(playerDeaths.encounterId, encounterIds));
+
+		// encounterPlayers for raid attendance and DPS
+		const epRows = await db
+			.select({
+				playerName: encounterPlayers.playerName,
+				playerGuid: encounterPlayers.playerGuid,
+				encounterId: encounterPlayers.encounterId,
+				damage: encounterPlayers.damage,
+			})
+			.from(encounterPlayers)
+			.where(inArray(encounterPlayers.encounterId, encounterIds));
+
+		// Distinct raids per player
+		const playerRaidSet = new Map<string, Set<string>>();
+		for (const ep of epRows) {
+			const raidId = encounterToRaid.get(ep.encounterId);
+			if (!raidId) continue;
+			const existing = playerRaidSet.get(ep.playerName) ?? new Set<string>();
+			existing.add(raidId);
+			playerRaidSet.set(ep.playerName, existing);
+		}
+
+		type DeathAgg = {
+			totalDeaths: number;
+			kbCounts: Map<string, number>;
+		};
+		const deathAgg = new Map<string, DeathAgg>();
+		for (const row of deathRows) {
+			const existing = deathAgg.get(row.playerName) ?? {
+				totalDeaths: 0,
+				kbCounts: new Map<string, number>(),
+			};
+			existing.totalDeaths += 1;
+			const kb = row.killingBlow as { sourceName?: string } | null;
+			const source = kb?.sourceName ?? "Unknown";
+			existing.kbCounts.set(source, (existing.kbCounts.get(source) ?? 0) + 1);
+			deathAgg.set(row.playerName, existing);
+		}
+
+		const deathsByPlayer = [...deathAgg.entries()]
+			.map(([playerName, agg]) => {
+				const raidsAttended = playerRaidSet.get(playerName)?.size ?? 1;
+				const deathsPerRaid = agg.totalDeaths / raidsAttended;
+				let topKillingSource: string | null = null;
+				let topKillingCount = 0;
+				for (const [source, cnt] of agg.kbCounts.entries()) {
+					if (cnt > topKillingCount) {
+						topKillingCount = cnt;
+						topKillingSource = source;
+					}
+				}
+				return { playerName, totalDeaths: agg.totalDeaths, deathsPerRaid, topKillingSource };
+			})
+			.sort((a, b) => b.totalDeaths - a.totalDeaths);
+
+		// -- performanceTrend: per raid, avg DPS (kill encounters only) and total deaths --
+		type RaidPerfAgg = {
+			killDamage: number;
+			killDurationMs: number;
+			deaths: number;
+		};
+		const raidPerfAgg = new Map<string, RaidPerfAgg>();
+
+		if (killEncounterIds.length > 0) {
+			const killEpRows = epRows.filter((ep) =>
+				killEncounterIds.includes(ep.encounterId),
+			);
+			for (const row of killEpRows) {
+				const raidId = encounterToRaid.get(row.encounterId);
+				if (!raidId) continue;
+				const enc = encounterRows.find((e) => e.id === row.encounterId);
+				const existing = raidPerfAgg.get(raidId) ?? {
+					killDamage: 0,
+					killDurationMs: 0,
+					deaths: 0,
+				};
+				existing.killDamage += row.damage;
+				if (enc) existing.killDurationMs += enc.durationMs;
+				raidPerfAgg.set(raidId, existing);
+			}
+		}
+
+		// Deaths per raid
+		for (const row of deathRows) {
+			const raidId = encounterToRaid.get(row.encounterId);
+			if (!raidId) continue;
+			const existing = raidPerfAgg.get(raidId) ?? {
+				killDamage: 0,
+				killDurationMs: 0,
+				deaths: 0,
+			};
+			existing.deaths += 1;
+			raidPerfAgg.set(raidId, existing);
+		}
+
+		const performanceTrend = periodRaids
+			.map((raid) => {
+				const perf = raidPerfAgg.get(raid.id);
+				const avgDps =
+					perf && perf.killDurationMs > 0
+						? Math.round((perf.killDamage / perf.killDurationMs) * 1000)
+						: 0;
+				return {
+					raidId: raid.id,
+					raidName: raidNameMap.get(raid.id) ?? null,
+					date: raidDateMap.get(raid.id) ?? null,
+					avgDps,
+					totalDeaths: perf?.deaths ?? 0,
+				};
+			})
+			.sort((a, b) => {
+				if (!a.date || !b.date) return 0;
+				return a.date.getTime() - b.date.getTime();
+			});
+
+		// -- attentionNeeded: avg DPS per player, grouped by role/class, flag bottom 20th percentile --
+		const rosterMembers = await db
+			.select({ id: members.id, name: members.name, class: members.class, role: members.role })
+			.from(members)
+			.where(eq(members.coreId, ctx.coreId));
+
+		const rosterByName = new Map(rosterMembers.map((m) => [m.name, m]));
+
+		// Avg DPS per player across kill encounters
+		type PlayerDpsAgg = { totalDamage: number; totalDurationMs: number };
+		const playerDpsAgg = new Map<string, PlayerDpsAgg>();
+
+		if (killEncounterIds.length > 0) {
+			const killEpForDps = epRows.filter((ep) =>
+				killEncounterIds.includes(ep.encounterId),
+			);
+			for (const row of killEpForDps) {
+				const enc = encounterRows.find((e) => e.id === row.encounterId);
+				const existing = playerDpsAgg.get(row.playerName) ?? {
+					totalDamage: 0,
+					totalDurationMs: 0,
+				};
+				existing.totalDamage += row.damage;
+				if (enc) existing.totalDurationMs += enc.durationMs;
+				playerDpsAgg.set(row.playerName, existing);
+			}
+		}
+
+		// Build per-player avg DPS, only for roster members
+		type PlayerDpsEntry = {
+			name: string;
+			memberId: string;
+			class: string | null;
+			role: string | null;
+			avgDps: number;
+		};
+		const playerDpsList: PlayerDpsEntry[] = [];
+		for (const [name, agg] of playerDpsAgg.entries()) {
+			const member = rosterByName.get(name);
+			if (!member) continue;
+			const avgDps =
+				agg.totalDurationMs > 0
+					? Math.round((agg.totalDamage / agg.totalDurationMs) * 1000)
+					: 0;
+			playerDpsList.push({
+				name,
+				memberId: member.id,
+				class: member.class,
+				role: member.role,
+				avgDps,
+			});
+		}
+
+		// Group by role (or class if role is null)
+		const groups = new Map<string, PlayerDpsEntry[]>();
+		for (const entry of playerDpsList) {
+			const groupKey = entry.role ?? entry.class ?? "Unknown";
+			const existing = groups.get(groupKey) ?? [];
+			existing.push(entry);
+			groups.set(groupKey, existing);
+		}
+
+		// Flag bottom 20th percentile per group (skip groups < 3)
+		type AttentionEntry = {
+			name: string;
+			memberId: string;
+			class: string | null;
+			role: string | null;
+			avgDps: number;
+			groupAvgDps: number;
+			pctDiff: number;
+		};
+		const attentionNeeded: AttentionEntry[] = [];
+
+		for (const [, groupMembers] of groups.entries()) {
+			if (groupMembers.length < 3) continue;
+			const sorted = [...groupMembers].sort((a, b) => a.avgDps - b.avgDps);
+			const groupAvgDps = sorted.reduce((s, m) => s + m.avgDps, 0) / sorted.length;
+			const threshold = sorted[Math.floor(sorted.length * 0.2)].avgDps;
+
+			for (const entry of sorted) {
+				if (entry.avgDps <= threshold) {
+					const pctDiff =
+						groupAvgDps > 0
+							? ((entry.avgDps - groupAvgDps) / groupAvgDps) * 100
+							: 0;
+					attentionNeeded.push({
+						name: entry.name,
+						memberId: entry.memberId,
+						class: entry.class,
+						role: entry.role,
+						avgDps: entry.avgDps,
+						groupAvgDps: Math.round(groupAvgDps),
+						pctDiff,
+					});
+				}
+			}
+		}
+
+		attentionNeeded.sort((a, b) => a.pctDiff - b.pctDiff);
+		const attentionNeededTop5 = attentionNeeded.slice(0, 5);
+
+		return { deathsByPlayer, performanceTrend, attentionNeeded: attentionNeededTop5 };
+	}),
 });
