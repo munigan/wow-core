@@ -231,4 +231,232 @@ export const overviewRouter = createTRPCRouter({
 
 		return { totalRaids, startDate, endDate, members: memberStats };
 	}),
+
+	getConsumableCompliance: protectedProcedure.query(async ({ ctx }) => {
+		const { currentStart } = getTimeWindows();
+
+		// Raids in window
+		const periodRaids = await db
+			.select({ id: raids.id, date: raids.date, name: raids.name })
+			.from(raids)
+			.where(and(eq(raids.coreId, ctx.coreId), gte(raids.date, currentStart)));
+
+		if (periodRaids.length === 0) {
+			return { byPlayer: [], byRaid: [] };
+		}
+
+		const raidIds = periodRaids.map((r) => r.id);
+
+		// All encounters for these raids
+		const encounterRows = await db
+			.select({ id: encounters.id, raidId: encounters.raidId })
+			.from(encounters)
+			.where(inArray(encounters.raidId, raidIds));
+
+		const encounterIds = encounterRows.map((e) => e.id);
+		if (encounterIds.length === 0) {
+			return { byPlayer: [], byRaid: [] };
+		}
+
+		const encounterToRaid = new Map(encounterRows.map((e) => [e.id, e.raidId]));
+		const raidDateMap = new Map(periodRaids.map((r) => [r.id, r.date]));
+		const raidNameMap = new Map(periodRaids.map((r) => [r.id, r.name]));
+
+		// Roster members for this core
+		const rosterMembers = await db
+			.select({ id: members.id, name: members.name, class: members.class, spec: members.spec })
+			.from(members)
+			.where(eq(members.coreId, ctx.coreId));
+
+		// Buff uptimes per (encounterId, playerGuid)
+		const uptimeRows = await db
+			.select({
+				encounterId: buffUptimes.encounterId,
+				playerGuid: buffUptimes.playerGuid,
+				flaskUptimePercent: buffUptimes.flaskUptimePercent,
+				foodUptimePercent: buffUptimes.foodUptimePercent,
+			})
+			.from(buffUptimes)
+			.where(inArray(buffUptimes.encounterId, encounterIds));
+
+		// Get encounterPlayers to map playerGuid -> playerName
+		const epRows = await db
+			.select({
+				encounterId: encounterPlayers.encounterId,
+				playerGuid: encounterPlayers.playerGuid,
+				playerName: encounterPlayers.playerName,
+			})
+			.from(encounterPlayers)
+			.where(inArray(encounterPlayers.encounterId, encounterIds));
+
+		const guidToName = new Map<string, string>();
+		for (const ep of epRows) {
+			if (!guidToName.has(ep.playerGuid)) {
+				guidToName.set(ep.playerGuid, ep.playerName);
+			}
+		}
+
+		// Consumable uses with prePot per (encounterId, playerGuid)
+		const consumableRows = await db
+			.select({
+				encounterId: consumableUses.encounterId,
+				playerGuid: consumableUses.playerGuid,
+				prePot: consumableUses.prePot,
+			})
+			.from(consumableUses)
+			.where(inArray(consumableUses.encounterId, encounterIds));
+
+		// --- byPlayer aggregation ---
+		type PlayerAgg = {
+			flaskValues: number[];
+			foodValues: number[];
+			prePotPairs: Set<string>;
+			totalPairs: Set<string>;
+		};
+		const playerAgg = new Map<string, PlayerAgg>();
+
+		for (const row of uptimeRows) {
+			const name = guidToName.get(row.playerGuid) ?? row.playerGuid;
+			const existing = playerAgg.get(name) ?? {
+				flaskValues: [],
+				foodValues: [],
+				prePotPairs: new Set(),
+				totalPairs: new Set(),
+			};
+			existing.flaskValues.push(row.flaskUptimePercent);
+			existing.foodValues.push(row.foodUptimePercent);
+			playerAgg.set(name, existing);
+		}
+
+		for (const row of epRows) {
+			const name = guidToName.get(row.playerGuid) ?? row.playerGuid;
+			const existing = playerAgg.get(name) ?? {
+				flaskValues: [],
+				foodValues: [],
+				prePotPairs: new Set(),
+				totalPairs: new Set(),
+			};
+			existing.totalPairs.add(`${row.encounterId}:${row.playerGuid}`);
+			playerAgg.set(name, existing);
+		}
+
+		for (const row of consumableRows) {
+			if (row.prePot) {
+				const name = guidToName.get(row.playerGuid) ?? row.playerGuid;
+				const existing = playerAgg.get(name);
+				if (existing) {
+					existing.prePotPairs.add(`${row.encounterId}:${row.playerGuid}`);
+				}
+			}
+		}
+
+		const rosterNameSet = new Set(rosterMembers.map((m) => m.name));
+
+		const byPlayer = [...playerAgg.entries()]
+			.filter(([name]) => rosterNameSet.has(name))
+			.map(([name, agg]) => {
+				const avgFlask =
+					agg.flaskValues.length > 0
+						? agg.flaskValues.reduce((s, v) => s + v, 0) / agg.flaskValues.length
+						: 0;
+				const avgFood =
+					agg.foodValues.length > 0
+						? agg.foodValues.reduce((s, v) => s + v, 0) / agg.foodValues.length
+						: 0;
+				const prePotRate =
+					agg.totalPairs.size > 0
+						? (agg.prePotPairs.size / agg.totalPairs.size) * 100
+						: 0;
+				const overallCompliance = (avgFlask + avgFood + prePotRate) / 3;
+				const member = rosterMembers.find((m) => m.name === name);
+				return {
+					memberId: member?.id ?? null,
+					name,
+					class: member?.class ?? null,
+					spec: member?.spec ?? null,
+					avgFlaskUptime: avgFlask,
+					avgFoodUptime: avgFood,
+					prePotRate,
+					overallCompliance,
+				};
+			})
+			.sort((a, b) => b.overallCompliance - a.overallCompliance);
+
+		// --- byRaid aggregation ---
+		type RaidAgg = {
+			flaskValues: number[];
+			foodValues: number[];
+			prePotPairs: Set<string>;
+			totalPairs: Set<string>;
+		};
+		const raidAgg = new Map<string, RaidAgg>();
+
+		for (const row of uptimeRows) {
+			const raidId = encounterToRaid.get(row.encounterId);
+			if (!raidId) continue;
+			const existing = raidAgg.get(raidId) ?? {
+				flaskValues: [],
+				foodValues: [],
+				prePotPairs: new Set(),
+				totalPairs: new Set(),
+			};
+			existing.flaskValues.push(row.flaskUptimePercent);
+			existing.foodValues.push(row.foodUptimePercent);
+			raidAgg.set(raidId, existing);
+		}
+
+		for (const row of epRows) {
+			const raidId = encounterToRaid.get(row.encounterId);
+			if (!raidId) continue;
+			const existing = raidAgg.get(raidId) ?? {
+				flaskValues: [],
+				foodValues: [],
+				prePotPairs: new Set(),
+				totalPairs: new Set(),
+			};
+			existing.totalPairs.add(`${row.encounterId}:${row.playerGuid}`);
+			raidAgg.set(raidId, existing);
+		}
+
+		for (const row of consumableRows) {
+			if (row.prePot) {
+				const raidId = encounterToRaid.get(row.encounterId);
+				if (!raidId) continue;
+				const existing = raidAgg.get(raidId);
+				if (existing) {
+					existing.prePotPairs.add(`${row.encounterId}:${row.playerGuid}`);
+				}
+			}
+		}
+
+		const byRaid = [...raidAgg.entries()]
+			.map(([raidId, agg]) => {
+				const avgFlask =
+					agg.flaskValues.length > 0
+						? agg.flaskValues.reduce((s, v) => s + v, 0) / agg.flaskValues.length
+						: 0;
+				const avgFood =
+					agg.foodValues.length > 0
+						? agg.foodValues.reduce((s, v) => s + v, 0) / agg.foodValues.length
+						: 0;
+				const prePotRate =
+					agg.totalPairs.size > 0
+						? (agg.prePotPairs.size / agg.totalPairs.size) * 100
+						: 0;
+				return {
+					raidId,
+					raidName: raidNameMap.get(raidId) ?? null,
+					date: raidDateMap.get(raidId) ?? null,
+					avgFlaskUptime: avgFlask,
+					avgFoodUptime: avgFood,
+					avgPrePotRate: prePotRate,
+				};
+			})
+			.sort((a, b) => {
+				if (!a.date || !b.date) return 0;
+				return a.date.getTime() - b.date.getTime();
+			});
+
+		return { byPlayer, byRaid };
+	}),
 });
