@@ -1,6 +1,7 @@
 "use client";
 
 import { ExternalLink, Info, TriangleAlert } from "lucide-react";
+import { useEffect } from "react";
 import { parseAsString, useQueryState } from "nuqs";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -47,8 +48,14 @@ export function GearInspector({ realm }: GearInspectorProps) {
 	const { data: memberList } = trpc.members.list.useQuery();
 
 	// Auto-select first member if none selected
-	const selectedMemberId =
-		memberId || memberList?.[0]?.id || "";
+	const firstMemberId = memberList?.[0]?.id ?? "";
+	const selectedMemberId = memberId || firstMemberId;
+
+	useEffect(() => {
+		if (!memberId && firstMemberId) {
+			setMemberId(firstMemberId);
+		}
+	}, [memberId, firstMemberId, setMemberId]);
 
 	const { data, isLoading } = trpc.gear.getByMember.useQuery(
 		{ memberId: selectedMemberId },
@@ -83,7 +90,7 @@ export function GearInspector({ realm }: GearInspectorProps) {
 
 				{selectedMember && (
 					<a
-						href={`https://armory.warmane.com/character/${encodeURIComponent(selectedMember.name)}/${encodeURIComponent(realm)}/summary`}
+						href={`https://armory.warmane.com/character/${encodeURIComponent(selectedMember.name)}/${encodeURIComponent(realm.charAt(0).toUpperCase() + realm.slice(1).toLowerCase())}/summary`}
 						target="_blank"
 						rel="noopener noreferrer"
 						className="flex items-center gap-2 border border-border px-3.5 py-2.5 font-body text-xs font-semibold uppercase tracking-wide text-secondary transition-colors hover:border-border-light hover:text-primary"

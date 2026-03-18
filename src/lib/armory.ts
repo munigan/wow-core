@@ -2,9 +2,9 @@ import { cacheLife, cacheTag } from "next/cache";
 
 const SLOT_NAMES = [
 	"Head", "Neck", "Shoulders", "Back", "Chest",
-	"Tabard", "Shirt", "Wrist", "Hands", "Waist",
+	"Shirt", "Tabard", "Wrist", "Hands", "Waist",
 	"Legs", "Feet", "Ring 1", "Ring 2",
-	"Trinket 1", "Trinket 2", "Main Hand", "Off Hand",
+	"Trinket 1", "Trinket 2", "Main Hand", "Off Hand", "Ranged",
 ] as const;
 
 const EXCLUDED_SLOTS = new Set(["Tabard", "Shirt"]);

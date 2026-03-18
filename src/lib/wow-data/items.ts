@@ -22,7 +22,7 @@ export async function fetchItemData(itemId: number): Promise<ItemData> {
 		}
 
 		const data = await res.json();
-		const itemLevelMatch = data.tooltip?.match(/Item Level (\d+)/);
+		const itemLevelMatch = data.tooltip?.match(/Item Level\s*(?:<!--\w*-->)?\s*(\d+)/);
 		const itemLevel = itemLevelMatch ? Number.parseInt(itemLevelMatch[1], 10) : 0;
 
 		return {
