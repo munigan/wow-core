@@ -135,13 +135,25 @@ export async function fetchArmoryGear(
 			signal: controller.signal,
 			body: JSON.stringify({
 				urls: [armoryUrl],
-				extraction_strategy: {
-					type: "llm",
-					provider: "gemini/gemini-2.0-flash",
-					api_token: process.env.GEMINI_API_KEY,
-					schema: EXTRACTION_JSON_SCHEMA,
-					instruction:
-						"Extract the character's equipped gear, professions, and basic info from this WoW armory page. For each gear slot, extract: the item ID from the wotlk.cavernoftime.com/item=XXXXX link, the item name, item level, quality (poor/common/uncommon/rare/epic/legendary), enchant name if present (null if none), all gem names as an array of strings, and the total number of gem sockets on the item. Skip Shirt and Tabard slots. For professions, extract name, current level, and max level.",
+				crawler_config: {
+					type: "CrawlerRunConfig",
+					params: {
+						extraction_strategy: {
+							type: "LLMExtractionStrategy",
+							params: {
+								llm_config: {
+									type: "LLMConfig",
+									params: {
+										provider: "gemini/gemini-2.0-flash",
+										api_token: process.env.GEMINI_API_KEY,
+									},
+								},
+								schema: EXTRACTION_JSON_SCHEMA,
+								instruction:
+									"Extract the character's equipped gear, professions, and basic info from this WoW armory page. For each gear slot, extract: the item ID from the wotlk.cavernoftime.com/item=XXXXX link, the item name, item level, quality (poor/common/uncommon/rare/epic/legendary), enchant name if present (null if none), all gem names as an array of strings, and the total number of gem sockets on the item. Skip Shirt and Tabard slots. For professions, extract name, current level, and max level.",
+							},
+						},
+					},
 				},
 			}),
 		});
