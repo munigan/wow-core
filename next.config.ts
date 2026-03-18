@@ -1,14 +1,5 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-	cacheComponents: true,
-	cacheLife: {
-		armory: {
-			stale: 86400,
-			revalidate: 86400,
-			expire: 604800,
-		},
-	},
-};
+const nextConfig: NextConfig = {};
 
 export default nextConfig;
