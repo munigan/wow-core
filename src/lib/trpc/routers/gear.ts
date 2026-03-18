@@ -8,6 +8,7 @@ import { members } from "@/lib/db/schema/members";
 import { QUALITY_NAME_TO_NUMBER } from "@/lib/wow-data/constants";
 import { createTRPCRouter, protectedProcedure } from "@/lib/trpc/init";
 
+// Includes variations Gemini may use for slot names
 const ENCHANTABLE_SLOTS = new Set([
 	"Head",
 	"Shoulders",
@@ -18,9 +19,13 @@ const ENCHANTABLE_SLOTS = new Set([
 	"Legs",
 	"Feet",
 	"Main Hand",
+	"Weapon",
 	"Off Hand",
+	"Offhand",
 	"Ring 1",
+	"Ring1",
 	"Ring 2",
+	"Ring2",
 ]);
 
 export const gearRouter = createTRPCRouter({

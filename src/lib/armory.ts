@@ -132,7 +132,7 @@ export async function fetchArmoryGear(
 								},
 								schema: EXTRACTION_SCHEMA,
 								instruction:
-									"Extract the character's equipped gear, professions, and basic info from this WoW armory page. For each gear slot, extract: the item ID from the wotlk.cavernoftime.com/item=XXXXX link, the item name, item level, quality (poor/common/uncommon/rare/epic/legendary), enchant name if present (null if none), all gem names as an array of strings, and the total number of gem sockets on the item. Skip Shirt and Tabard slots. For professions, extract name, current level, and max level.",
+									"Extract the character's equipped gear, professions, and basic info from this WoW armory page. For each gear slot, extract: the item ID number from the wotlk.cavernoftime.com/item=XXXXX link URL, the item name, item level, quality (poor/common/uncommon/rare/epic/legendary), enchant name if present (null if none), all gem names as an array of strings, and the total number of gem sockets on the item. Use these exact slot names: Head, Neck, Shoulders, Back, Chest, Wrist, Hands, Waist, Legs, Feet, Ring 1, Ring 2, Trinket 1, Trinket 2, Main Hand, Off Hand, Ranged. Do NOT include Shirt or Tabard slots. For professions, extract name, current level, and max level.",
 							},
 						},
 					},
