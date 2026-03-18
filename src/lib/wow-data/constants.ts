@@ -10,3 +10,15 @@ export const QUALITY_COLORS: Record<number, string> = {
 	6: "#e6cc80",
 	7: "#00ccff",
 };
+
+// Quality name (from Gemini extraction) → quality number (for QUALITY_COLORS lookup)
+export const QUALITY_NAME_TO_NUMBER: Record<string, number> = {
+	poor: 0,
+	common: 1,
+	uncommon: 2,
+	rare: 3,
+	epic: 4,
+	legendary: 5,
+	artifact: 6,
+	heirloom: 7,
+};
