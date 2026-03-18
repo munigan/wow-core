@@ -1,55 +1,37 @@
 import { cacheLife, cacheTag } from "next/cache";
 import { z } from "zod/v4";
 
-// JSON Schema for crawl4ai LLM extraction (sent in REST API body)
-// crawl4ai expects plain JSON Schema, not Zod.
-const EXTRACTION_JSON_SCHEMA = {
-	type: "object",
-	properties: {
-		character: {
-			type: "object",
-			properties: {
-				name: { type: "string" },
-				level: { type: "number" },
-				race: { type: "string" },
-				class: { type: "string" },
-				spec: { type: "string" },
-				guild: { type: ["string", "null"] },
-				realm: { type: "string" },
-			},
-			required: ["name", "level", "race", "class", "spec", "realm"],
-		},
-		gear: {
-			type: "array",
-			items: {
-				type: "object",
-				properties: {
-					slot: { type: "string" },
-					itemId: { type: "number" },
-					itemName: { type: "string" },
-					itemLevel: { type: "number" },
-					quality: { type: "string" },
-					enchant: { type: ["string", "null"] },
-					gems: { type: "array", items: { type: "string" } },
-					totalSockets: { type: "number" },
-				},
-				required: ["slot", "itemId", "itemName", "itemLevel", "quality", "gems", "totalSockets"],
-			},
-		},
-		professions: {
-			type: "array",
-			items: {
-				type: "object",
-				properties: {
-					name: { type: "string" },
-					level: { type: "number" },
-					maxLevel: { type: "number" },
-				},
-				required: ["name", "level", "maxLevel"],
-			},
-		},
+// Schema for crawl4ai LLM extraction — uses crawl4ai's simple dict format,
+// NOT standard JSON Schema (crawl4ai deserializes "type" fields as class names)
+const EXTRACTION_SCHEMA = {
+	character: {
+		name: "string",
+		level: "number",
+		race: "string",
+		class: "string",
+		spec: "string",
+		guild: "string or null",
+		realm: "string",
 	},
-	required: ["character", "gear", "professions"],
+	gear: [
+		{
+			slot: "string",
+			itemId: "number",
+			itemName: "string",
+			itemLevel: "number",
+			quality: "string",
+			enchant: "string or null",
+			gems: ["string"],
+			totalSockets: "number",
+		},
+	],
+	professions: [
+		{
+			name: "string",
+			level: "number",
+			maxLevel: "number",
+		},
+	],
 };
 
 // Zod schema for runtime validation of crawl4ai response
@@ -127,7 +109,7 @@ export async function fetchArmoryGear(
 
 	try {
 		const controller = new AbortController();
-		const timeout = setTimeout(() => controller.abort(), 60_000);
+		const timeout = setTimeout(() => controller.abort(), 120_000);
 
 		const response = await fetch(`${crawl4aiUrl}/crawl`, {
 			method: "POST",
@@ -148,7 +130,7 @@ export async function fetchArmoryGear(
 										api_token: process.env.GEMINI_API_KEY,
 									},
 								},
-								schema: EXTRACTION_JSON_SCHEMA,
+								schema: EXTRACTION_SCHEMA,
 								instruction:
 									"Extract the character's equipped gear, professions, and basic info from this WoW armory page. For each gear slot, extract: the item ID from the wotlk.cavernoftime.com/item=XXXXX link, the item name, item level, quality (poor/common/uncommon/rare/epic/legendary), enchant name if present (null if none), all gem names as an array of strings, and the total number of gem sockets on the item. Skip Shirt and Tabard slots. For professions, extract name, current level, and max level.",
 							},
