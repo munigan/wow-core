@@ -1,9 +1,15 @@
 "use client";
 
 import { keepPreviousData } from "@tanstack/react-query";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
+import {
+	parseAsInteger,
+	parseAsString,
+	parseAsStringEnum,
+	useQueryState,
+} from "nuqs";
 import { Fragment } from "react";
-import { parseAsString, parseAsStringEnum, useQueryState } from "nuqs";
 import {
 	SelectItem,
 	SelectPopup,
@@ -48,6 +54,8 @@ function groupByDate(
 	return groups;
 }
 
+const PER_PAGE = 20;
+
 export function RaidsList() {
 	const [instance, setInstance] = useQueryState(
 		"instance",
@@ -57,12 +65,15 @@ export function RaidsList() {
 		"range",
 		parseAsStringEnum(["7d", "30d", "90d", "all"]).withDefault("all"),
 	);
+	const [page, setPage] = useQueryState("page", parseAsInteger.withDefault(1));
 
 	const { data: instances } = trpc.raids.listInstances.useQuery();
-	const { data: raids, isLoading } = trpc.raids.list.useQuery(
+	const { data, isLoading } = trpc.raids.list.useQuery(
 		{
 			instance: instance || undefined,
 			dateRange: dateRange as "7d" | "30d" | "90d" | "all",
+			page,
+			perPage: PER_PAGE,
 		},
 		{ placeholderData: keepPreviousData },
 	);
@@ -72,7 +83,7 @@ export function RaidsList() {
 		...(instances ?? []).map((i) => ({ value: i, label: i })),
 	];
 
-	if (isLoading && !raids) {
+	if (isLoading && !data) {
 		return (
 			<div className="flex flex-col gap-4">
 				<div className="flex items-center gap-2">
@@ -82,15 +93,21 @@ export function RaidsList() {
 				<div className="border border-border">
 					<Skeleton className="h-10 w-full" />
 					{Array.from({ length: 5 }).map((_, i) => (
-						<Skeleton key={i} className="h-12 w-full border-t border-border" />
+						<Skeleton
+							key={`skeleton-${i}`}
+							className="h-12 w-full border-t border-border"
+						/>
 					))}
 				</div>
 			</div>
 		);
 	}
 
-	const grouped = groupByDate(raids ?? []);
-	const hasNoRaidsAtAll = !raids || raids.length === 0;
+	const raids = data?.items ?? [];
+	const totalCount = data?.totalCount ?? 0;
+	const totalPages = Math.max(1, Math.ceil(totalCount / PER_PAGE));
+	const grouped = groupByDate(raids);
+	const hasNoRaidsAtAll = raids.length === 0;
 	const isFiltered = instance !== "" || dateRange !== "all";
 
 	return (
@@ -100,7 +117,10 @@ export function RaidsList() {
 				<SelectRoot
 					value={instance}
 					items={instanceItems}
-					onValueChangeAction={(v) => setInstance(v ?? "")}
+					onValueChangeAction={(v) => {
+						setInstance(v ?? "");
+						setPage(1);
+					}}
 				>
 					<SelectTrigger placeholder="All Instances" size="sm" />
 					<SelectPopup>
@@ -120,7 +140,10 @@ export function RaidsList() {
 							type="button"
 							data-active={dateRange === range || undefined}
 							className="border border-border bg-elevated px-3 py-1.5 font-body text-2xs font-semibold uppercase tracking-wide text-secondary transition-colors hover:text-primary data-active:bg-accent-10 data-active:text-accent"
-							onClick={() => setDateRange(range)}
+							onClick={() => {
+								setDateRange(range);
+								setPage(1);
+							}}
 						>
 							{DATE_RANGE_LABELS[range]}
 						</button>
@@ -146,21 +169,11 @@ export function RaidsList() {
 					<table className="w-full font-body">
 						<thead>
 							<tr className="border-b border-border text-2xs uppercase tracking-wider text-dimmed">
-								<th className="py-2.5 pl-4 text-left font-normal">
-									Raid
-								</th>
-								<th className="py-2.5 text-left font-normal">
-									Instance
-								</th>
-								<th className="w-24 py-2.5 text-left font-normal">
-									Duration
-								</th>
-								<th className="w-20 py-2.5 text-left font-normal">
-									Bosses
-								</th>
-								<th className="w-20 py-2.5 text-left font-normal">
-									Players
-								</th>
+								<th className="py-2.5 pl-4 text-left font-normal">Raid</th>
+								<th className="py-2.5 text-left font-normal">Instance</th>
+								<th className="w-24 py-2.5 text-left font-normal">Duration</th>
+								<th className="w-20 py-2.5 text-left font-normal">Bosses</th>
+								<th className="w-20 py-2.5 text-left font-normal">Players</th>
 								<th className="w-20 py-2.5 pr-4 text-left font-normal">
 									Deaths
 								</th>
@@ -197,6 +210,13 @@ export function RaidsList() {
 													>
 														{r.name as string}
 													</Link>
+													<span className="ml-2 font-body text-2xs text-dimmed">
+														{new Date(r.date).toLocaleTimeString("en-US", {
+															hour: "2-digit",
+															minute: "2-digit",
+															hour12: false,
+														})}
+													</span>
 												</td>
 												<td className="py-2.5 text-secondary">
 													{r.raidInstance ?? "—"}
@@ -204,12 +224,8 @@ export function RaidsList() {
 												<td className="py-2.5 text-secondary">
 													{formatDuration(r.durationMs)}
 												</td>
-												<td className="py-2.5 text-primary">
-													{r.bossKills}
-												</td>
-												<td className="py-2.5 text-primary">
-													{r.playerCount}
-												</td>
+												<td className="py-2.5 text-primary">{r.bossKills}</td>
+												<td className="py-2.5 text-primary">{r.playerCount}</td>
 												<td
 													data-has-deaths={r.deathCount > 0 || undefined}
 													className="py-2.5 pr-4 text-dimmed data-has-deaths:text-danger"
@@ -225,6 +241,33 @@ export function RaidsList() {
 					</table>
 				</div>
 			)}
+
+			{/* Pagination */}
+			<div className="flex items-center justify-between font-body text-xs text-secondary">
+				<span>
+					Page {page} of {totalPages} ({totalCount} raids)
+				</span>
+				<div className="flex gap-1">
+					<button
+						type="button"
+						disabled={page <= 1}
+						onClick={() => setPage(page - 1)}
+						className="inline-flex items-center gap-1 border border-border px-2.5 py-1.5 text-secondary transition-colors hover:text-primary disabled:opacity-40 disabled:hover:text-secondary"
+					>
+						<ChevronLeft className="size-3" />
+						Prev
+					</button>
+					<button
+						type="button"
+						disabled={page >= totalPages}
+						onClick={() => setPage(page + 1)}
+						className="inline-flex items-center gap-1 border border-border px-2.5 py-1.5 text-secondary transition-colors hover:text-primary disabled:opacity-40 disabled:hover:text-secondary"
+					>
+						Next
+						<ChevronRight className="size-3" />
+					</button>
+				</div>
+			</div>
 		</div>
 	);
 }

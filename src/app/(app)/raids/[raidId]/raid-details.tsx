@@ -1,9 +1,45 @@
 "use client";
 
+import { TrendingDown, TrendingUp } from "lucide-react";
+import { parseAsString, parseAsStringEnum, useQueryState } from "nuqs";
+import { useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SortHeader } from "@/components/ui/sort-header";
 import { trpc } from "@/lib/trpc/client";
 import { EncounterRow } from "./encounter-row";
 import { PlayerBreakdown } from "./player-breakdown";
+
+function MetricChange({
+	current,
+	average,
+	higherIsBetter,
+}: {
+	current: number;
+	average: number;
+	higherIsBetter: boolean;
+}) {
+	if (average === 0) return null;
+	const pct = ((current - average) / average) * 100;
+	const isPositive = pct > 0;
+	const isGood = higherIsBetter ? isPositive : !isPositive;
+
+	return (
+		<span
+			data-good={isGood || undefined}
+			className="flex items-center gap-1 text-danger data-good:text-accent"
+		>
+			{isPositive ? (
+				<TrendingUp className="size-3" />
+			) : (
+				<TrendingDown className="size-3" />
+			)}
+			<span className="font-body text-2xs font-semibold">
+				{isPositive ? "+" : ""}
+				{pct.toFixed(1)}%
+			</span>
+		</span>
+	);
+}
 
 type RaidDetailsProps = {
 	raidId: string;
@@ -24,7 +60,40 @@ function formatNumber(n: number): string {
 }
 
 export function RaidDetails({ raidId }: RaidDetailsProps) {
+	const [encSort, setEncSort] = useQueryState(
+		"esort",
+		parseAsString.withDefault("order"),
+	);
+	const [encDir, setEncDir] = useQueryState(
+		"edir",
+		parseAsStringEnum(["asc", "desc"]).withDefault("asc"),
+	);
+
 	const { data } = trpc.raids.getById.useQuery({ raidId });
+	const { data: avgData } = trpc.raids.getInstanceAverages.useQuery(
+		{ raidInstance: data?.raidInstance ?? "" },
+		{ enabled: !!data?.raidInstance },
+	);
+
+	const killEncounters = useMemo(() => {
+		if (!data) return [];
+		const kills = data.encounters.filter((e) => e.result === "kill");
+		const dir = encDir === "asc" ? 1 : -1;
+		return [...kills].sort((a, b) => {
+			switch (encSort) {
+				case "encounter":
+					return dir * a.bossName.localeCompare(b.bossName);
+				case "dps":
+					return dir * (a.raidDps - b.raidDps);
+				case "duration":
+					return dir * (a.durationMs - b.durationMs);
+				case "deaths":
+					return dir * (a.deathCount - b.deathCount);
+				default:
+					return dir * (a.order - b.order);
+			}
+		});
+	}, [data, encSort, encDir]);
 
 	if (!data) {
 		return (
@@ -48,7 +117,6 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 
 	const { encounters, ...raid } = data;
 
-	const killEncounters = encounters.filter((e) => e.result === "kill");
 	const wipeEncounters = encounters.filter((e) => e.result === "wipe");
 
 	// Group encounters by boss name for wipe count
@@ -82,8 +150,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 			? Math.round((totalKillDamage / totalKillDurationMs) * 1000)
 			: 0;
 
-	const uniqueBossKills = new Set(killEncounters.map((e) => e.bossName)).size;
-	const uniquePlayerCount = data.uniquePlayerCount;
+	const showAvg = avgData && avgData.raidCount > 1;
 
 	const raidDateStr = new Date(raid.date).toLocaleDateString("en-US", {
 		year: "numeric",
@@ -107,37 +174,65 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 
 			{/* Metric Cards */}
 			<div className="grid grid-cols-4 gap-3">
-				<div className="flex flex-col gap-1 border border-border bg-card p-4">
+				<div className="flex flex-col gap-2 border border-border bg-card p-4">
 					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
 						Raid DPS
 					</span>
 					<span className="font-heading text-3xl font-bold text-accent">
 						{formatNumber(raidDps)}
 					</span>
+					{showAvg && (
+						<MetricChange
+							current={raidDps}
+							average={avgData.avgDps}
+							higherIsBetter
+						/>
+					)}
 				</div>
-				<div className="flex flex-col gap-1 border border-border bg-card p-4">
+				<div className="flex flex-col gap-2 border border-border bg-card p-4">
 					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
 						Duration
 					</span>
 					<span className="font-heading text-3xl font-bold text-primary">
 						{formatDuration(raid.durationMs ?? 0)}
 					</span>
+					{showAvg && (
+						<MetricChange
+							current={raid.durationMs ?? 0}
+							average={avgData.avgDurationMs}
+							higherIsBetter={false}
+						/>
+					)}
 				</div>
-				<div className="flex flex-col gap-1 border border-border bg-card p-4">
+				<div className="flex flex-col gap-2 border border-border bg-card p-4">
 					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
-						Bosses
+						Consumables
 					</span>
 					<span className="font-heading text-3xl font-bold text-primary">
-						{uniqueBossKills}
+						{data.totalConsumables}
 					</span>
+					{showAvg && (
+						<MetricChange
+							current={data.totalConsumables}
+							average={avgData.avgConsumables}
+							higherIsBetter
+						/>
+					)}
 				</div>
-				<div className="flex flex-col gap-1 border border-border bg-card p-4">
+				<div className="flex flex-col gap-2 border border-border bg-card p-4">
 					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
-						Players
+						Deaths
 					</span>
 					<span className="font-heading text-3xl font-bold text-primary">
-						{uniquePlayerCount}
+						{data.totalDeaths}
 					</span>
+					{showAvg && (
+						<MetricChange
+							current={data.totalDeaths}
+							average={avgData.avgDeaths}
+							higherIsBetter={false}
+						/>
+					)}
 				</div>
 			</div>
 
@@ -149,19 +244,72 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 				<div className="overflow-hidden border border-border bg-card">
 					<table className="w-full font-body">
 						<thead>
-							<tr className="border-b border-border text-2xs uppercase tracking-wider text-dimmed">
-								<th className="py-2.5 pl-4 text-left font-normal">Encounter</th>
-								<th className="w-28 py-2.5 text-left font-normal">DPS</th>
-								<th className="w-28 py-2.5 text-left font-normal">Duration</th>
-								<th className="w-24 py-2.5 text-left font-normal">Deaths</th>
-								<th className="w-24 py-2.5 pr-4 text-left font-normal">Status</th>
+							<tr className="border-b border-border">
+								<SortHeader
+									label="#"
+									column="order"
+									currentSort={encSort}
+									currentDirection={encDir}
+									onSortAction={(c, d) => {
+										setEncSort(c);
+										setEncDir(d);
+									}}
+									className="w-14 pl-4"
+								/>
+								<SortHeader
+									label="Encounter"
+									column="encounter"
+									currentSort={encSort}
+									currentDirection={encDir}
+									onSortAction={(c, d) => {
+										setEncSort(c);
+										setEncDir(d);
+									}}
+								/>
+								<SortHeader
+									label="DPS"
+									column="dps"
+									currentSort={encSort}
+									currentDirection={encDir}
+									onSortAction={(c, d) => {
+										setEncSort(c);
+										setEncDir(d);
+									}}
+									className="w-28"
+								/>
+								<SortHeader
+									label="Duration"
+									column="duration"
+									currentSort={encSort}
+									currentDirection={encDir}
+									onSortAction={(c, d) => {
+										setEncSort(c);
+										setEncDir(d);
+									}}
+									className="w-28"
+								/>
+								<SortHeader
+									label="Deaths"
+									column="deaths"
+									currentSort={encSort}
+									currentDirection={encDir}
+									onSortAction={(c, d) => {
+										setEncSort(c);
+										setEncDir(d);
+									}}
+									className="w-24"
+								/>
+								<th className="w-24 py-2.5 pr-4 text-left text-2xs font-normal uppercase tracking-wider text-dimmed">
+									Status
+								</th>
 							</tr>
 						</thead>
 						<tbody>
-							{killEncounters.map((enc) => (
+							{killEncounters.map((enc, idx) => (
 								<EncounterRow
 									key={enc.id}
 									encounter={enc}
+									killOrder={idx + 1}
 									wipeCount={wipeCountByBoss.get(enc.bossName) ?? 0}
 									wipes={wipesByBoss.get(enc.bossName) ?? []}
 									formatNumber={formatNumber}
@@ -175,7 +323,10 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 			{/* Per-Player Breakdown */}
 			{killEncounters.length > 0 && (
 				<PlayerBreakdown
-					encounters={killEncounters.map((e) => ({ id: e.id, bossName: e.bossName }))}
+					encounters={killEncounters.map((e) => ({
+						id: e.id,
+						bossName: e.bossName,
+					}))}
 					formatNumber={formatNumber}
 				/>
 			)}

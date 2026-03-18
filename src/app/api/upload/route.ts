@@ -1,11 +1,5 @@
-import type {
-	ParsedRaid,
-	RaidSelection,
-} from "@munigan/wow-combatlog-parser";
-import {
-	FileTooLargeError,
-	parseLog,
-} from "@munigan/wow-combatlog-parser";
+import type { ParsedRaid, RaidSelection } from "@munigan/wow-combatlog-parser";
+import { FileTooLargeError, parseLog } from "@munigan/wow-combatlog-parser";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
@@ -33,9 +27,7 @@ async function saveRaidToDb(
 	parsedRaid: ParsedRaid,
 	selectedRaid: SelectedRaidPayload,
 ) {
-	const playerMap = new Map(
-		parsedRaid.players.map((p) => [p.guid, p]),
-	);
+	const playerMap = new Map(parsedRaid.players.map((p) => [p.guid, p]));
 
 	// Upsert members from raid players (always, even for duplicates)
 	if (parsedRaid.players.length > 0) {
@@ -59,14 +51,18 @@ async function saveRaidToDb(
 			});
 	}
 
-	// Skip if raid with same core + date + instance already exists
+	// Use the actual start time from the combat log (selectedRaid.startTime)
+	// instead of parsedRaid.raidDate which is date-only (midnight).
+	const raidStartTime = new Date(selectedRaid.startTime);
+
+	// Skip if raid with same core + start time + instance already exists
 	const [existingRaid] = await tx
 		.select({ id: raids.id })
 		.from(raids)
 		.where(
 			and(
 				eq(raids.coreId, selectedRaid.coreId),
-				eq(raids.date, parsedRaid.raidDate),
+				eq(raids.date, raidStartTime),
 				parsedRaid.raidInstance
 					? eq(raids.raidInstance, parsedRaid.raidInstance)
 					: isNull(raids.raidInstance),
@@ -78,7 +74,7 @@ async function saveRaidToDb(
 		return {
 			raidId: existingRaid.id,
 			raidName: selectedRaid.raidName,
-			raidDate: parsedRaid.raidDate.toISOString(),
+			raidDate: raidStartTime.toISOString(),
 			raidInstance: parsedRaid.raidInstance,
 			totalMembers: parsedRaid.players.length,
 			isDuplicate: true,
@@ -90,7 +86,7 @@ async function saveRaidToDb(
 		.values({
 			coreId: selectedRaid.coreId,
 			name: selectedRaid.raidName,
-			date: parsedRaid.raidDate,
+			date: raidStartTime,
 			raidInstance: parsedRaid.raidInstance,
 			durationMs: parsedRaid.raidDurationMs,
 		})
@@ -207,7 +203,7 @@ async function saveRaidToDb(
 	return {
 		raidId: raidRow.id,
 		raidName: selectedRaid.raidName,
-		raidDate: parsedRaid.raidDate.toISOString(),
+		raidDate: raidStartTime.toISOString(),
 		raidInstance: parsedRaid.raidInstance,
 		totalMembers: parsedRaid.players.length,
 	};
@@ -240,9 +236,7 @@ export async function POST(request: Request) {
 
 		// Verify all selected raids target the user's active core
 		const activeCoreId = session.session.activeOrganizationId;
-		const hasInvalidCore = selectedRaids.some(
-			(r) => r.coreId !== activeCoreId,
-		);
+		const hasInvalidCore = selectedRaids.some((r) => r.coreId !== activeCoreId);
 		if (!activeCoreId || hasInvalidCore) {
 			return Response.json(
 				{ error: "Invalid core selection" },
@@ -262,11 +256,7 @@ export async function POST(request: Request) {
 		const results = await db.transaction(async (tx) => {
 			const raidResults = [];
 			for (let i = 0; i < parsedRaids.length; i++) {
-				const result = await saveRaidToDb(
-					tx,
-					parsedRaids[i],
-					selectedRaids[i],
-				);
+				const result = await saveRaidToDb(tx, parsedRaids[i], selectedRaids[i]);
 				raidResults.push(result);
 			}
 			return raidResults;
@@ -278,10 +268,8 @@ export async function POST(request: Request) {
 			return Response.json({ error: "File too large" }, { status: 413 });
 		}
 		console.error("Upload error:", error);
-		const message = error instanceof Error ? error.message : "Failed to process log file";
-		return Response.json(
-			{ error: message },
-			{ status: 500 },
-		);
+		const message =
+			error instanceof Error ? error.message : "Failed to process log file";
+		return Response.json({ error: message }, { status: 500 });
 	}
 }

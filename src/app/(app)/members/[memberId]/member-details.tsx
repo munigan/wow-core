@@ -12,9 +12,8 @@ import shamanIcon from "@/assets/classes/shaman.png";
 import warlockIcon from "@/assets/classes/warlock.png";
 import warriorIcon from "@/assets/classes/warrior.png";
 import { AreaChart } from "@/components/ui/area-chart";
-import { Card } from "@/components/ui/card";
-import { HeatmapGrid } from "@/components/ui/heatmap-grid";
 import type { HeatmapCell, HeatmapRow } from "@/components/ui/heatmap-grid";
+import { HeatmapGrid } from "@/components/ui/heatmap-grid";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipLabel } from "@/components/ui/tooltip";
 import { trpc } from "@/lib/trpc/client";
@@ -45,9 +44,13 @@ const CLASS_COLORS: Record<string, string> = {
 	druid: "text-class-druid",
 };
 
-function formatSpec(spec: string | null, playerClass: string | null): string | null {
+function formatSpec(
+	spec: string | null,
+	playerClass: string | null,
+): string | null {
 	if (!spec || !playerClass) return null;
-	const classPrefix = playerClass === "death-knight" ? "death-knight-" : `${playerClass}-`;
+	const classPrefix =
+		playerClass === "death-knight" ? "death-knight-" : `${playerClass}-`;
 	if (!spec.startsWith(classPrefix)) return null;
 	const specName = spec.slice(classPrefix.length);
 	return specName.charAt(0).toUpperCase() + specName.slice(1);
@@ -82,7 +85,10 @@ function getUptimeStatus(value: number | null): "full" | "partial" | "empty" {
 	return "empty";
 }
 
-function getCoverageStatus(covered: number, total: number): "full" | "partial" | "empty" {
+function getCoverageStatus(
+	covered: number,
+	total: number,
+): "full" | "partial" | "empty" {
 	if (total === 0) return "empty";
 	const ratio = covered / total;
 	if (ratio >= 1) return "full";
@@ -111,12 +117,9 @@ export function MemberDetails({ memberId }: MemberDetailsProps) {
 					<Skeleton className="h-4 w-64" />
 				</div>
 				{/* Stat cards skeleton */}
-				<div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+				<div className="grid grid-cols-4 gap-3">
 					{Array.from({ length: 4 }).map((_, i) => (
-						<Card key={i}>
-							<Skeleton className="h-8 w-24" />
-							<Skeleton className="h-3 w-16" />
-						</Card>
+						<Skeleton key={i} className="h-16 w-full" />
 					))}
 				</div>
 				{/* Chart skeleton */}
@@ -163,7 +166,10 @@ export function MemberDetails({ memberId }: MemberDetailsProps) {
 			},
 			{
 				display: `${d.consumableCoverage.covered}/${d.consumableCoverage.total}`,
-				status: getCoverageStatus(d.consumableCoverage.covered, d.consumableCoverage.total),
+				status: getCoverageStatus(
+					d.consumableCoverage.covered,
+					d.consumableCoverage.total,
+				),
 			},
 		] satisfies HeatmapCell[],
 	}));
@@ -188,59 +194,57 @@ export function MemberDetails({ memberId }: MemberDetailsProps) {
 						className={`capitalize ${CLASS_COLORS[playerClass ?? ""] ?? "text-secondary"}`}
 					>
 						{playerClass ?? "Unknown"}
-						{spec && (
-							<span className="text-dimmed"> ({spec})</span>
-						)}
+						{spec && <span className="text-dimmed"> ({spec})</span>}
 					</span>
 				</div>
 			</div>
 
-			{/* Stat Cards */}
-			<div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-				<Card>
+			{/* Metric Cards */}
+			<div className="grid grid-cols-4 gap-3">
+				<div className="flex flex-col gap-1 border border-border bg-card p-4">
+					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
+						Avg DPS
+					</span>
 					<span
 						{...getStatAttrs("dps", stats.avgDps)}
 						className="font-heading text-3xl font-bold text-danger data-good:text-accent data-neutral:text-primary data-warn:text-warning"
 					>
 						{hasData ? formatNumber(stats.avgDps) : "—"}
 					</span>
-					<span className="font-body text-2xs uppercase tracking-wider text-secondary">
-						Avg DPS
+				</div>
+				<div className="flex flex-col gap-1 border border-border bg-card p-4">
+					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
+						Raids Attended
 					</span>
-				</Card>
-				<Card>
 					<span
 						{...getStatAttrs("attendance", stats.raidAttendance)}
 						className="font-heading text-3xl font-bold text-danger data-good:text-accent data-neutral:text-primary data-warn:text-warning"
 					>
 						{hasData ? stats.raidAttendance : "—"}
 					</span>
-					<span className="font-body text-2xs uppercase tracking-wider text-secondary">
-						Raids Attended
+				</div>
+				<div className="flex flex-col gap-1 border border-border bg-card p-4">
+					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
+						Pre-pot Rate
 					</span>
-				</Card>
-				<Card>
 					<span
 						{...getStatAttrs("prepot", stats.prePotRate)}
 						className="font-heading text-3xl font-bold text-danger data-good:text-accent data-neutral:text-primary data-warn:text-warning"
 					>
 						{hasData ? `${stats.prePotRate}%` : "—"}
 					</span>
-					<span className="font-body text-2xs uppercase tracking-wider text-secondary">
-						Pre-pot Rate
+				</div>
+				<div className="flex flex-col gap-1 border border-border bg-card p-4">
+					<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
+						Total Deaths
 					</span>
-				</Card>
-				<Card>
 					<span
 						{...getStatAttrs("deaths", stats.totalDeaths)}
 						className="font-heading text-3xl font-bold text-danger data-good:text-accent data-neutral:text-primary data-warn:text-warning"
 					>
 						{hasData ? stats.totalDeaths : "—"}
 					</span>
-					<span className="font-body text-2xs uppercase tracking-wider text-secondary">
-						Total Deaths
-					</span>
-				</Card>
+				</div>
 			</div>
 
 			{/* DPS Trend Chart */}
@@ -249,28 +253,30 @@ export function MemberDetails({ memberId }: MemberDetailsProps) {
 					// DPS Trend — Last 8 Weeks
 				</span>
 				{chartData.length > 0 ? (
-				<div className="border border-border bg-card p-4">
-					<AreaChart
-						data={chartData}
-						color="var(--color-accent)"
-						height={280}
-						tooltipFormatterAction={(point) => (
-							<div className="flex flex-col gap-1">
-								<TooltipLabel>{point.meta?.date ?? point.label}</TooltipLabel>
-								<div className="flex items-center justify-between gap-6 font-body text-xs">
-									<span className="text-secondary">Avg DPS</span>
-									<span className="font-semibold text-accent">
-										{formatNumber(point.value)}
-									</span>
+					<div className="border border-border bg-card p-4">
+						<AreaChart
+							data={chartData}
+							color="var(--color-accent)"
+							height={280}
+							tooltipFormatterAction={(point) => (
+								<div className="flex flex-col gap-1">
+									<TooltipLabel>{point.meta?.date ?? point.label}</TooltipLabel>
+									<div className="flex items-center justify-between gap-6 font-body text-xs">
+										<span className="text-secondary">Avg DPS</span>
+										<span className="font-semibold text-accent">
+											{formatNumber(point.value)}
+										</span>
+									</div>
+									<div className="flex items-center justify-between gap-6 font-body text-xs">
+										<span className="text-secondary">Encounters</span>
+										<span className="text-primary">
+											{point.meta?.encounters}
+										</span>
+									</div>
 								</div>
-								<div className="flex items-center justify-between gap-6 font-body text-xs">
-									<span className="text-secondary">Encounters</span>
-									<span className="text-primary">{point.meta?.encounters}</span>
-								</div>
-							</div>
-						)}
-					/>
-				</div>
+							)}
+						/>
+					</div>
 				) : (
 					<div className="flex h-70 items-center justify-center border border-border bg-card">
 						<span className="font-body text-sm text-dimmed">
@@ -290,7 +296,9 @@ export function MemberDetails({ memberId }: MemberDetailsProps) {
 						rows={heatmapRows}
 						columns={["Flask", "Food", "Consumables"]}
 						tooltipFormatterAction={(row, colIndex) => {
-							const dateData = heatmapData.find((d) => formatDate(d.date) === row.label);
+							const dateData = heatmapData.find(
+								(d) => formatDate(d.date) === row.label,
+							);
 							if (!dateData) return null;
 
 							if (colIndex === 0) {
@@ -298,7 +306,9 @@ export function MemberDetails({ memberId }: MemberDetailsProps) {
 									<div className="flex flex-col gap-1">
 										<TooltipLabel>Flask Uptime</TooltipLabel>
 										<span className="font-body text-xs text-primary">
-											{dateData.flaskUptime !== null ? `${Math.round(dateData.flaskUptime)}%` : "No data"}
+											{dateData.flaskUptime !== null
+												? `${Math.round(dateData.flaskUptime)}%`
+												: "No data"}
 										</span>
 										<span className="font-body text-2xs text-dimmed">
 											{dateData.encounterCount} encounters
@@ -312,7 +322,9 @@ export function MemberDetails({ memberId }: MemberDetailsProps) {
 									<div className="flex flex-col gap-1">
 										<TooltipLabel>Food Uptime</TooltipLabel>
 										<span className="font-body text-xs text-primary">
-											{dateData.foodUptime !== null ? `${Math.round(dateData.foodUptime)}%` : "No data"}
+											{dateData.foodUptime !== null
+												? `${Math.round(dateData.foodUptime)}%`
+												: "No data"}
 										</span>
 										<span className="font-body text-2xs text-dimmed">
 											{dateData.encounterCount} encounters
@@ -326,28 +338,40 @@ export function MemberDetails({ memberId }: MemberDetailsProps) {
 								<div className="flex flex-col gap-2">
 									<TooltipLabel>Consumables</TooltipLabel>
 									<span className="font-body text-2xs text-dimmed">
-										{dateData.consumableCoverage.covered}/{dateData.consumableCoverage.total} encounters covered
+										{dateData.consumableCoverage.covered}/
+										{dateData.consumableCoverage.total} encounters covered
 									</span>
-									{Object.entries(dateData.consumablesByBoss).map(([boss, items]) => (
-										<div key={boss} className="flex flex-col gap-0.5">
-											<span className="font-body text-2xs font-bold text-primary">{boss}</span>
-											{items.length > 0 ? (
-												items.map((item, i) => (
-													<div key={i} className="flex items-center justify-between gap-6 font-body text-xs">
-														<span className="text-accent">
-															{item.spellName}
-															{item.isPrePot && (
-																<span className="text-warning"> (PP)</span>
-															)}
-														</span>
-														<span className="text-secondary">x{item.count}</span>
-													</div>
-												))
-											) : (
-												<span className="font-body text-2xs text-dimmed">None</span>
-											)}
-										</div>
-									))}
+									{Object.entries(dateData.consumablesByBoss).map(
+										([boss, items]) => (
+											<div key={boss} className="flex flex-col gap-0.5">
+												<span className="font-body text-2xs font-bold text-primary">
+													{boss}
+												</span>
+												{items.length > 0 ? (
+													items.map((item, i) => (
+														<div
+															key={i}
+															className="flex items-center justify-between gap-6 font-body text-xs"
+														>
+															<span className="text-accent">
+																{item.spellName}
+																{item.isPrePot && (
+																	<span className="text-warning"> (PP)</span>
+																)}
+															</span>
+															<span className="text-secondary">
+																x{item.count}
+															</span>
+														</div>
+													))
+												) : (
+													<span className="font-body text-2xs text-dimmed">
+														None
+													</span>
+												)}
+											</div>
+										),
+									)}
 								</div>
 							);
 						}}

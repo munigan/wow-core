@@ -1,9 +1,15 @@
 "use client";
 
 import { keepPreviousData } from "@tanstack/react-query";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { parseAsString, useQueryState } from "nuqs";
+import {
+	parseAsInteger,
+	parseAsString,
+	parseAsStringEnum,
+	useQueryState,
+} from "nuqs";
 import dkIcon from "@/assets/classes/dk.png";
 import druidIcon from "@/assets/classes/druid.png";
 import hunterIcon from "@/assets/classes/hunter.png";
@@ -22,6 +28,7 @@ import {
 	SelectTrigger,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SortHeader } from "@/components/ui/sort-header";
 import { trpc } from "@/lib/trpc/client";
 
 const CLASS_ICONS: Record<string, typeof dkIcon> = {
@@ -50,13 +57,19 @@ const CLASS_COLORS: Record<string, string> = {
 	druid: "text-class-druid",
 };
 
-function formatSpec(spec: string | null, playerClass: string | null): string | null {
+function formatSpec(
+	spec: string | null,
+	playerClass: string | null,
+): string | null {
 	if (!spec || !playerClass) return null;
-	const classPrefix = playerClass === "death-knight" ? "death-knight-" : `${playerClass}-`;
+	const classPrefix =
+		playerClass === "death-knight" ? "death-knight-" : `${playerClass}-`;
 	if (!spec.startsWith(classPrefix)) return null;
 	const specName = spec.slice(classPrefix.length);
 	return specName.charAt(0).toUpperCase() + specName.slice(1);
 }
+
+const PER_PAGE = 50;
 
 export function MembersList() {
 	const [classFilter, setClassFilter] = useQueryState(
@@ -67,21 +80,34 @@ export function MembersList() {
 		"search",
 		parseAsString.withDefault(""),
 	);
+	const [sortColumn, setSortColumn] = useQueryState(
+		"sort",
+		parseAsString.withDefault("name"),
+	);
+	const [sortDir, setSortDir] = useQueryState(
+		"dir",
+		parseAsStringEnum(["asc", "desc"]).withDefault("asc"),
+	);
+	const [page, setPage] = useQueryState("page", parseAsInteger.withDefault(1));
 
-	const { data: membersList, isLoading } = trpc.members.listWithStats.useQuery(
+	const { data, isLoading } = trpc.members.listWithStats.useQuery(
 		{
 			class: classFilter || undefined,
 			search: search || undefined,
+			sort: sortColumn as "name" | "class" | "raids",
+			direction: sortDir as "asc" | "desc",
+			page,
+			perPage: PER_PAGE,
 		},
 		{ placeholderData: keepPreviousData },
 	);
 
+	const membersList = data?.items ?? [];
+	const totalCount = data?.totalCount ?? 0;
+	const totalPages = Math.ceil(totalCount / PER_PAGE);
+
 	const uniqueClasses = [
-		...new Set(
-			(membersList ?? [])
-				.map((m) => m.class)
-				.filter(Boolean),
-		),
+		...new Set(membersList.map((m) => m.class).filter(Boolean)),
 	].sort() as string[];
 
 	const classItems = [
@@ -89,7 +115,7 @@ export function MembersList() {
 		...uniqueClasses.map((cls) => ({ value: cls, label: cls })),
 	];
 
-	if (isLoading && !membersList) {
+	if (isLoading && !data) {
 		return (
 			<div className="flex flex-col gap-4">
 				<div className="flex items-center gap-2">
@@ -99,15 +125,24 @@ export function MembersList() {
 				<div className="border border-border">
 					<Skeleton className="h-10 w-full" />
 					{Array.from({ length: 8 }).map((_, i) => (
-						<Skeleton key={i} className="h-12 w-full border-t border-border" />
+						<Skeleton
+							key={`skeleton-${i}`}
+							className="h-12 w-full border-t border-border"
+						/>
 					))}
 				</div>
 			</div>
 		);
 	}
 
-	const hasNoMembers = !membersList || membersList.length === 0;
+	const hasNoMembers = membersList.length === 0;
 	const isFiltered = classFilter !== "" || search !== "";
+
+	function handleSort(column: string, direction: "asc" | "desc") {
+		setSortColumn(column);
+		setSortDir(direction);
+		setPage(1);
+	}
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -116,7 +151,10 @@ export function MembersList() {
 				<SelectRoot
 					value={classFilter}
 					items={classItems}
-					onValueChangeAction={(v) => setClassFilter(v ?? "")}
+					onValueChangeAction={(v) => {
+						setClassFilter(v ?? "");
+						setPage(1);
+					}}
 				>
 					<SelectTrigger placeholder="All Classes" size="sm" />
 					<SelectPopup>
@@ -131,7 +169,10 @@ export function MembersList() {
 
 				<Input
 					value={search}
-					onChange={(e) => setSearch(e.target.value || null)}
+					onChange={(e) => {
+						setSearch(e.target.value || null);
+						setPage(1);
+					}}
 					placeholder="Search members..."
 					className="h-8 w-48 text-2xs"
 				/>
@@ -154,10 +195,30 @@ export function MembersList() {
 				<div className="border border-border bg-card">
 					<table className="w-full font-body">
 						<thead>
-							<tr className="border-b border-border text-2xs uppercase tracking-wider text-dimmed">
-								<th className="py-2.5 pl-4 text-left font-normal">Name</th>
-								<th className="py-2.5 text-left font-normal">Class</th>
-								<th className="w-20 py-2.5 pr-4 text-left font-normal">Raids</th>
+							<tr className="border-b border-border">
+								<SortHeader
+									label="Name"
+									column="name"
+									currentSort={sortColumn}
+									currentDirection={sortDir}
+									onSortAction={handleSort}
+									className="pl-4"
+								/>
+								<SortHeader
+									label="Class"
+									column="class"
+									currentSort={sortColumn}
+									currentDirection={sortDir}
+									onSortAction={handleSort}
+								/>
+								<SortHeader
+									label="Raids"
+									column="raids"
+									currentSort={sortColumn}
+									currentDirection={sortDir}
+									onSortAction={handleSort}
+									className="w-20 pr-4"
+								/>
 							</tr>
 						</thead>
 						<tbody className="text-sm">
@@ -190,7 +251,8 @@ export function MembersList() {
 												{member.class ?? "Unknown"}
 												{formatSpec(member.latestSpec, member.class) && (
 													<span className="text-dimmed">
-														{" "}({formatSpec(member.latestSpec, member.class)})
+														{" "}
+														({formatSpec(member.latestSpec, member.class)})
 													</span>
 												)}
 											</span>
@@ -203,6 +265,35 @@ export function MembersList() {
 							))}
 						</tbody>
 					</table>
+				</div>
+			)}
+
+			{/* Pagination */}
+			{totalPages > 1 && (
+				<div className="flex items-center justify-between font-body text-xs text-secondary">
+					<span>
+						Page {page} of {totalPages} ({totalCount} members)
+					</span>
+					<div className="flex gap-1">
+						<button
+							type="button"
+							disabled={page <= 1}
+							onClick={() => setPage(page - 1)}
+							className="inline-flex items-center gap-1 border border-border px-2.5 py-1.5 text-secondary transition-colors hover:text-primary disabled:opacity-40 disabled:hover:text-secondary"
+						>
+							<ChevronLeft className="size-3" />
+							Prev
+						</button>
+						<button
+							type="button"
+							disabled={page >= totalPages}
+							onClick={() => setPage(page + 1)}
+							className="inline-flex items-center gap-1 border border-border px-2.5 py-1.5 text-secondary transition-colors hover:text-primary disabled:opacity-40 disabled:hover:text-secondary"
+						>
+							Next
+							<ChevronRight className="size-3" />
+						</button>
+					</div>
 				</div>
 			)}
 		</div>

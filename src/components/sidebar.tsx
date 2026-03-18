@@ -32,6 +32,14 @@ export const Sidebar = ({ user, cores, activeCoreId }: SidebarProps) => {
 				</span>
 			</div>
 
+			{/* Core selector */}
+			<div className="flex flex-col gap-1 px-5 pb-4">
+				<span className="font-body text-2xs font-bold uppercase tracking-wide text-dimmed">
+					{"// Active Core"}
+				</span>
+				<CoreSwitcher cores={cores} activeCoreId={activeCoreId} />
+			</div>
+
 			{/* Navigation */}
 			<NavLinks />
 
@@ -40,14 +48,6 @@ export const Sidebar = ({ user, cores, activeCoreId }: SidebarProps) => {
 
 			{/* Bottom section */}
 			<div className="flex flex-col gap-3 border-t border-border px-5 py-4">
-				{/* Core selector */}
-				<div className="flex flex-col gap-1">
-					<span className="font-body text-2xs font-bold uppercase tracking-wide text-dimmed">
-						{"// Active Core"}
-					</span>
-					<CoreSwitcher cores={cores} activeCoreId={activeCoreId} />
-				</div>
-
 				{/* Upload log */}
 				<UploadLogDialog cores={cores} activeCoreId={activeCoreId} />
 

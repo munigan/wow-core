@@ -27,6 +27,10 @@
 # worktrees
 .worktrees/
 
+# mcp/tools
+.playwright-mcp/
+.superpowers/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

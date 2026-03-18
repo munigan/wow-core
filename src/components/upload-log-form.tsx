@@ -723,16 +723,19 @@ export function UploadLogForm({
 				</div>
 				<div className="flex flex-col gap-1">
 					{results.map((result) => {
-						const dateStr = new Date(result.raidDate).toLocaleDateString(
-							"en-US",
-							{
-								month: "long",
-								day: "numeric",
-							},
-						);
+						const raidDateObj = new Date(result.raidDate);
+						const dateStr = raidDateObj.toLocaleDateString("en-US", {
+							month: "long",
+							day: "numeric",
+						});
+						const timeStr = raidDateObj.toLocaleTimeString("en-US", {
+							hour: "2-digit",
+							minute: "2-digit",
+							hour12: false,
+						});
 						return (
 							<div
-								key={`${result.raidName}-${result.raidDate}`}
+								key={result.raidId}
 								className="flex items-center justify-between border border-border px-3 py-2"
 							>
 								<div className="flex flex-col gap-0.5">
@@ -740,7 +743,7 @@ export function UploadLogForm({
 										{result.raidName}
 									</span>
 									<span className="font-body text-2xs text-dimmed">
-										{dateStr}
+										{dateStr} at {timeStr}
 									</span>
 								</div>
 								<span className="font-body text-xs text-secondary">

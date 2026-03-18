@@ -1,5 +1,16 @@
 import { TRPCError } from "@trpc/server";
-import { and, count, countDistinct, desc, eq, gte, inArray, isNotNull, sql, sum } from "drizzle-orm";
+import {
+	and,
+	count,
+	countDistinct,
+	desc,
+	eq,
+	gte,
+	inArray,
+	isNotNull,
+	sql,
+	sum,
+} from "drizzle-orm";
 import { z } from "zod/v4";
 import { db } from "@/lib/db";
 import { buffUptimes } from "@/lib/db/schema/buff-uptimes";
@@ -17,6 +28,8 @@ export const raidsRouter = createTRPCRouter({
 				.object({
 					instance: z.string().optional(),
 					dateRange: z.enum(["7d", "30d", "90d", "all"]).optional(),
+					page: z.number().int().min(1).optional(),
+					perPage: z.number().int().min(1).max(100).optional(),
 				})
 				.optional(),
 		)
@@ -34,13 +47,23 @@ export const raidsRouter = createTRPCRouter({
 				conditions.push(gte(raids.date, cutoff));
 			}
 
+			const page = input?.page ?? 1;
+			const perPage = input?.perPage ?? 20;
+
+			const [{ totalCount }] = await db
+				.select({ totalCount: count() })
+				.from(raids)
+				.where(and(...conditions));
+
 			const raidRows = await db
 				.select()
 				.from(raids)
 				.where(and(...conditions))
-				.orderBy(desc(raids.date));
+				.orderBy(desc(raids.date))
+				.limit(perPage)
+				.offset((page - 1) * perPage);
 
-			if (raidRows.length === 0) return [];
+			if (raidRows.length === 0) return { items: [], totalCount };
 
 			const raidIds = raidRows.map((r) => r.id);
 
@@ -66,11 +89,13 @@ export const raidsRouter = createTRPCRouter({
 				.where(inArray(encounters.raidId, raidIds));
 
 			const encounterIds = encounterRows.map((e) => e.id);
-			const encounterToRaid = new Map(encounterRows.map((e) => [e.id, e.raidId]));
+			const encounterToRaid = new Map(
+				encounterRows.map((e) => [e.id, e.raidId]),
+			);
 
 			// Aggregate player count per raid (through encounters)
 			let playerCountMap = new Map<string, number>();
-			let deathCountMap = new Map<string, number>();
+			const deathCountMap = new Map<string, number>();
 
 			if (encounterIds.length > 0) {
 				const playerCounts = await db
@@ -91,7 +116,10 @@ export const raidsRouter = createTRPCRouter({
 					playersPerRaid.set(raidId, existing);
 				}
 				playerCountMap = new Map(
-					[...playersPerRaid.entries()].map(([raidId, guids]) => [raidId, guids.size]),
+					[...playersPerRaid.entries()].map(([raidId, guids]) => [
+						raidId,
+						guids.size,
+					]),
 				);
 
 				// Aggregate deaths per raid
@@ -118,21 +146,21 @@ export const raidsRouter = createTRPCRouter({
 				bossKills.map((b) => [b.raidId, b.bossKills]),
 			);
 
-			return raidRows.map((raid) => ({
+			const items = raidRows.map((raid) => ({
 				...raid,
 				bossKills: bossKillMap.get(raid.id) ?? 0,
 				playerCount: playerCountMap.get(raid.id) ?? 0,
 				deathCount: deathCountMap.get(raid.id) ?? 0,
 			}));
+
+			return { items, totalCount };
 		}),
 
 	listInstances: protectedProcedure.query(async ({ ctx }) => {
 		const rows = await db
 			.select({ raidInstance: raids.raidInstance })
 			.from(raids)
-			.where(
-				and(eq(raids.coreId, ctx.coreId), isNotNull(raids.raidInstance)),
-			)
+			.where(and(eq(raids.coreId, ctx.coreId), isNotNull(raids.raidInstance)))
 			.groupBy(raids.raidInstance);
 
 		return rows
@@ -162,9 +190,7 @@ export const raidsRouter = createTRPCRouter({
 			const raid = await db
 				.select()
 				.from(raids)
-				.where(
-					and(eq(raids.id, input.raidId), eq(raids.coreId, ctx.coreId)),
-				)
+				.where(and(eq(raids.id, input.raidId), eq(raids.coreId, ctx.coreId)))
 				.then((rows) => rows[0]);
 
 			if (!raid) {
@@ -185,6 +211,8 @@ export const raidsRouter = createTRPCRouter({
 					...raid,
 					uniquePlayerCount: 0,
 					encounters: [],
+					totalDeaths: 0,
+					totalConsumables: 0,
 				};
 			}
 
@@ -218,7 +246,10 @@ export const raidsRouter = createTRPCRouter({
 				.groupBy(playerDeaths.encounterId);
 
 			const damageMap = new Map(
-				damageByEncounter.map((d) => [d.encounterId, Number(d.totalDamage ?? 0)]),
+				damageByEncounter.map((d) => [
+					d.encounterId,
+					Number(d.totalDamage ?? 0),
+				]),
 			);
 			const deathMap = new Map(
 				deathsByEncounter.map((d) => [d.encounterId, d.deathCount]),
@@ -226,7 +257,9 @@ export const raidsRouter = createTRPCRouter({
 
 			// Count unique players across all encounters
 			const [playerCountResult] = await db
-				.select({ uniquePlayers: sql<number>`count(distinct ${encounterPlayers.playerGuid})` })
+				.select({
+					uniquePlayers: sql<number>`count(distinct ${encounterPlayers.playerGuid})`,
+				})
 				.from(encounterPlayers)
 				.where(
 					inArray(
@@ -250,10 +283,29 @@ export const raidsRouter = createTRPCRouter({
 				};
 			});
 
+			// Total deaths across all encounters
+			const totalDeaths = encountersWithStats.reduce(
+				(sum, e) => sum + e.deathCount,
+				0,
+			);
+
+			// Total consumable uses across all encounters
+			const encounterIdsForRaid = encounterRows.map((e) => e.id);
+			let totalConsumables = 0;
+			if (encounterIdsForRaid.length > 0) {
+				const [consumableResult] = await db
+					.select({ total: count() })
+					.from(consumableUses)
+					.where(inArray(consumableUses.encounterId, encounterIdsForRaid));
+				totalConsumables = consumableResult?.total ?? 0;
+			}
+
 			return {
 				...raid,
 				uniquePlayerCount: Number(playerCountResult?.uniquePlayers ?? 0),
 				encounters: encountersWithStats,
+				totalDeaths,
+				totalConsumables,
 			};
 		}),
 
@@ -304,9 +356,7 @@ export const raidsRouter = createTRPCRouter({
 				.from(buffUptimes)
 				.where(eq(buffUptimes.encounterId, input.encounterId));
 
-			const uptimeMap = new Map(
-				uptimes.map((u) => [u.playerGuid, u]),
-			);
+			const uptimeMap = new Map(uptimes.map((u) => [u.playerGuid, u]));
 
 			// Consumable uses
 			const consumables = await db
@@ -351,9 +401,7 @@ export const raidsRouter = createTRPCRouter({
 					return {
 						...p,
 						dps:
-							durationMs > 0
-								? Math.round((p.damage / durationMs) * 1000)
-								: 0,
+							durationMs > 0 ? Math.round((p.damage / durationMs) * 1000) : 0,
 						deathCount: deathCountByPlayer.get(p.playerGuid) ?? 0,
 						flaskUptime: uptime?.flaskUptimePercent ?? null,
 						foodUptime: uptime?.foodUptimePercent ?? null,
@@ -369,5 +417,143 @@ export const raidsRouter = createTRPCRouter({
 				encounter: encounter.encounters,
 				players: playersWithStats,
 			};
+		}),
+
+	getEncounterDeaths: protectedProcedure
+		.input(z.object({ encounterId: z.string() }))
+		.query(async ({ ctx, input }) => {
+			// Verify encounter belongs to user's core
+			const encounter = await db
+				.select({ id: encounters.id })
+				.from(encounters)
+				.innerJoin(raids, eq(encounters.raidId, raids.id))
+				.where(
+					and(
+						eq(encounters.id, input.encounterId),
+						eq(raids.coreId, ctx.coreId),
+					),
+				)
+				.then((rows) => rows[0]);
+
+			if (!encounter) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Encounter not found",
+				});
+			}
+
+			const deaths = await db
+				.select({
+					playerName: playerDeaths.playerName,
+					timeIntoEncounter: playerDeaths.timeIntoEncounter,
+					killingBlow: playerDeaths.killingBlow,
+				})
+				.from(playerDeaths)
+				.where(eq(playerDeaths.encounterId, input.encounterId))
+				.orderBy(playerDeaths.timeIntoEncounter);
+
+			return deaths.map((d) => {
+				const kb = d.killingBlow as {
+					spellName?: string;
+					sourceName?: string;
+					amount?: number;
+				} | null;
+				return {
+					playerName: d.playerName,
+					timeIntoEncounter: d.timeIntoEncounter,
+					killingSpell: kb?.spellName ?? null,
+					killedBy: kb?.sourceName ?? null,
+				};
+			});
+		}),
+
+	getInstanceAverages: protectedProcedure
+		.input(z.object({ raidInstance: z.string() }))
+		.query(async ({ ctx, input }) => {
+			// Get all raids of this instance for the core
+			const instanceRaids = await db
+				.select({ id: raids.id, durationMs: raids.durationMs })
+				.from(raids)
+				.where(
+					and(
+						eq(raids.coreId, ctx.coreId),
+						eq(raids.raidInstance, input.raidInstance),
+					),
+				);
+
+			const raidCount = instanceRaids.length;
+			if (raidCount === 0) {
+				return {
+					avgDps: 0,
+					avgDurationMs: 0,
+					avgDeaths: 0,
+					avgConsumables: 0,
+					raidCount: 0,
+				};
+			}
+
+			const raidIds = instanceRaids.map((r) => r.id);
+
+			// All encounters for these raids
+			const allEncounters = await db
+				.select({
+					id: encounters.id,
+					raidId: encounters.raidId,
+					durationMs: encounters.durationMs,
+					result: encounters.result,
+				})
+				.from(encounters)
+				.where(inArray(encounters.raidId, raidIds));
+
+			const killEncounters = allEncounters.filter((e) => e.result === "kill");
+			const allEncounterIds = allEncounters.map((e) => e.id);
+			const killEncounterIds = killEncounters.map((e) => e.id);
+
+			// Avg DPS: total kill damage / total kill duration across all raids
+			let avgDps = 0;
+			if (killEncounterIds.length > 0) {
+				const [damageResult] = await db
+					.select({ totalDamage: sum(encounterPlayers.damage) })
+					.from(encounterPlayers)
+					.where(inArray(encounterPlayers.encounterId, killEncounterIds));
+				const totalDamage = Number(damageResult?.totalDamage ?? 0);
+				const totalDurationMs = killEncounters.reduce(
+					(s, e) => s + e.durationMs,
+					0,
+				);
+				avgDps =
+					totalDurationMs > 0
+						? Math.round((totalDamage / totalDurationMs) * 1000)
+						: 0;
+			}
+
+			// Avg Duration
+			const totalDuration = instanceRaids.reduce(
+				(s, r) => s + (r.durationMs ?? 0),
+				0,
+			);
+			const avgDurationMs = Math.round(totalDuration / raidCount);
+
+			// Avg Deaths per raid
+			let avgDeaths = 0;
+			if (allEncounterIds.length > 0) {
+				const [deathResult] = await db
+					.select({ total: count() })
+					.from(playerDeaths)
+					.where(inArray(playerDeaths.encounterId, allEncounterIds));
+				avgDeaths = Math.round((deathResult?.total ?? 0) / raidCount);
+			}
+
+			// Avg Consumables per raid
+			let avgConsumables = 0;
+			if (allEncounterIds.length > 0) {
+				const [consumableResult] = await db
+					.select({ total: count() })
+					.from(consumableUses)
+					.where(inArray(consumableUses.encounterId, allEncounterIds));
+				avgConsumables = Math.round((consumableResult?.total ?? 0) / raidCount);
+			}
+
+			return { avgDps, avgDurationMs, avgDeaths, avgConsumables, raidCount };
 		}),
 });

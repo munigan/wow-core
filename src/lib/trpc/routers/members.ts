@@ -1,5 +1,15 @@
 import { TRPCError } from "@trpc/server";
-import { and, asc, countDistinct, desc, eq, gte, ilike, inArray } from "drizzle-orm";
+import {
+	and,
+	asc,
+	count,
+	countDistinct,
+	desc,
+	eq,
+	gte,
+	ilike,
+	inArray,
+} from "drizzle-orm";
 import { z } from "zod/v4";
 import { db } from "@/lib/db";
 import { buffUptimes } from "@/lib/db/schema/buff-uptimes";
@@ -45,6 +55,10 @@ export const membersRouter = createTRPCRouter({
 				.object({
 					class: z.string().optional(),
 					search: z.string().optional(),
+					sort: z.enum(["name", "class", "raids"]).optional(),
+					direction: z.enum(["asc", "desc"]).optional(),
+					page: z.number().int().min(1).optional(),
+					perPage: z.number().int().min(1).max(100).optional(),
 				})
 				.optional(),
 		)
@@ -58,13 +72,34 @@ export const membersRouter = createTRPCRouter({
 				conditions.push(ilike(members.name, `%${input.search}%`));
 			}
 
+			const sortCol = input?.sort ?? "name";
+			const sortDir = input?.direction ?? "asc";
+			const orderFn = sortDir === "asc" ? asc : desc;
+
+			// biome-ignore lint/suspicious/noExplicitAny: Drizzle column types vary
+			const dbColumnMap: Record<string, any> = {
+				name: members.name,
+				class: members.class,
+			};
+			const dbColumn = dbColumnMap[sortCol];
+
+			const page = input?.page ?? 1;
+			const perPage = input?.perPage ?? 50;
+
+			const [{ totalCount }] = await db
+				.select({ totalCount: count() })
+				.from(members)
+				.where(and(...conditions));
+
 			const memberRows = await db
 				.select()
 				.from(members)
 				.where(and(...conditions))
-				.orderBy(asc(members.name));
+				.orderBy(dbColumn ? orderFn(dbColumn) : asc(members.name))
+				.limit(perPage)
+				.offset((page - 1) * perPage);
 
-			if (memberRows.length === 0) return [];
+			if (memberRows.length === 0) return { items: [], totalCount };
 
 			// Get raid counts per member by joining encounter_players → encounters
 			const memberNames = memberRows.map((m) => m.name);
@@ -115,11 +150,19 @@ export const membersRouter = createTRPCRouter({
 				}
 			}
 
-			return memberRows.map((member) => ({
+			let items = memberRows.map((member) => ({
 				...member,
 				raidCount: raidCountMap.get(member.name) ?? 0,
 				latestSpec: specMap.get(member.name) ?? member.spec,
 			}));
+
+			// Sort by computed column (raids) in JS
+			if (sortCol === "raids") {
+				const dir = sortDir === "asc" ? 1 : -1;
+				items = items.sort((a, b) => dir * (a.raidCount - b.raidCount));
+			}
+
+			return { items, totalCount };
 		}),
 
 	getById: protectedProcedure
@@ -171,7 +214,12 @@ export const membersRouter = createTRPCRouter({
 			if (playerEncounters.length === 0) {
 				return {
 					member: { ...member, latestSpec: member.spec },
-					stats: { avgDps: 0, raidAttendance: 0, prePotRate: 0, totalDeaths: 0 },
+					stats: {
+						avgDps: 0,
+						raidAttendance: 0,
+						prePotRate: 0,
+						totalDeaths: 0,
+					},
 					dpsTrend: [],
 					heatmapData: [],
 				};
@@ -179,12 +227,38 @@ export const membersRouter = createTRPCRouter({
 
 			// Collect all encounter IDs and GUIDs for batch queries
 			const allEncounterIds = playerEncounters.map((pe) => pe.encounterId);
-			const allGuids = [...new Set(playerEncounters.map((pe) => pe.playerGuid))];
+			const allGuids = [
+				...new Set(playerEncounters.map((pe) => pe.playerGuid)),
+			];
 
 			const [uptimes, consumables, deaths] = await Promise.all([
-				db.select().from(buffUptimes).where(and(inArray(buffUptimes.encounterId, allEncounterIds), inArray(buffUptimes.playerGuid, allGuids))),
-				db.select().from(consumableUses).where(and(inArray(consumableUses.encounterId, allEncounterIds), inArray(consumableUses.playerGuid, allGuids))),
-				db.select().from(playerDeaths).where(and(inArray(playerDeaths.encounterId, allEncounterIds), inArray(playerDeaths.playerGuid, allGuids))),
+				db
+					.select()
+					.from(buffUptimes)
+					.where(
+						and(
+							inArray(buffUptimes.encounterId, allEncounterIds),
+							inArray(buffUptimes.playerGuid, allGuids),
+						),
+					),
+				db
+					.select()
+					.from(consumableUses)
+					.where(
+						and(
+							inArray(consumableUses.encounterId, allEncounterIds),
+							inArray(consumableUses.playerGuid, allGuids),
+						),
+					),
+				db
+					.select()
+					.from(playerDeaths)
+					.where(
+						and(
+							inArray(playerDeaths.encounterId, allEncounterIds),
+							inArray(playerDeaths.playerGuid, allGuids),
+						),
+					),
 			]);
 
 			const uptimeByEncGuid = new Map(
@@ -202,14 +276,16 @@ export const membersRouter = createTRPCRouter({
 
 			// Stat card aggregates
 			const totalEncounters = playerEncounters.length;
-			const totalDps = totalEncounters > 0
-				? Math.round(
-						playerEncounters.reduce((sum, pe) => {
-							const dps = pe.durationMs > 0 ? (pe.damage / pe.durationMs) * 1000 : 0;
-							return sum + dps;
-						}, 0) / totalEncounters,
-					)
-				: 0;
+			const totalDps =
+				totalEncounters > 0
+					? Math.round(
+							playerEncounters.reduce((sum, pe) => {
+								const dps =
+									pe.durationMs > 0 ? (pe.damage / pe.durationMs) * 1000 : 0;
+								return sum + dps;
+							}, 0) / totalEncounters,
+						)
+					: 0;
 
 			const uniqueRaidIds = new Set(playerEncounters.map((pe) => pe.raidId));
 			const raidAttendance = uniqueRaidIds.size;
@@ -220,9 +296,10 @@ export const membersRouter = createTRPCRouter({
 					encounterIdsWithPrePot.add(c.encounterId);
 				}
 			}
-			const prePotRate = totalEncounters > 0
-				? Math.round((encounterIdsWithPrePot.size / totalEncounters) * 100)
-				: 0;
+			const prePotRate =
+				totalEncounters > 0
+					? Math.round((encounterIdsWithPrePot.size / totalEncounters) * 100)
+					: 0;
 
 			const totalDeaths = deaths.length;
 
@@ -246,11 +323,24 @@ export const membersRouter = createTRPCRouter({
 				.sort((a, b) => a.date.localeCompare(b.date));
 
 			// Heatmap data
-			const encountersByDate = new Map<string, { encounters: { encounterId: string; playerGuid: string; bossName: string }[] }>();
+			const encountersByDate = new Map<
+				string,
+				{
+					encounters: {
+						encounterId: string;
+						playerGuid: string;
+						bossName: string;
+					}[];
+				}
+			>();
 			for (const pe of playerEncounters) {
 				const dateKey = new Date(pe.raidDate).toISOString().split("T")[0];
 				const entry = encountersByDate.get(dateKey) ?? { encounters: [] };
-				entry.encounters.push({ encounterId: pe.encounterId, playerGuid: pe.playerGuid, bossName: pe.bossName });
+				entry.encounters.push({
+					encounterId: pe.encounterId,
+					playerGuid: pe.playerGuid,
+					bossName: pe.bossName,
+				});
 				encountersByDate.set(dateKey, entry);
 			}
 
@@ -260,7 +350,15 @@ export const membersRouter = createTRPCRouter({
 					let foodTotal = 0;
 					let uptimeCount = 0;
 					let encountersWithConsumable = 0;
-					const consumablesByBoss: Record<string, { spellName: string; count: number; type: string; isPrePot: boolean }[]> = {};
+					const consumablesByBoss: Record<
+						string,
+						{
+							spellName: string;
+							count: number;
+							type: string;
+							isPrePot: boolean;
+						}[]
+					> = {};
 
 					for (const enc of encs) {
 						const key = `${enc.encounterId}:${enc.playerGuid}`;
@@ -272,18 +370,29 @@ export const membersRouter = createTRPCRouter({
 						}
 						const cons = consumablesByEncGuid.get(key) ?? [];
 						if (cons.length > 0) encountersWithConsumable++;
-						if (!consumablesByBoss[enc.bossName]) consumablesByBoss[enc.bossName] = [];
+						if (!consumablesByBoss[enc.bossName])
+							consumablesByBoss[enc.bossName] = [];
 						for (const c of cons) {
-							consumablesByBoss[enc.bossName].push({ spellName: c.spellName, count: c.count, type: c.type, isPrePot: c.prePot });
+							consumablesByBoss[enc.bossName].push({
+								spellName: c.spellName,
+								count: c.count,
+								type: c.type,
+								isPrePot: c.prePot,
+							});
 						}
 					}
 
 					return {
 						date,
 						encounterCount: encs.length,
-						flaskUptime: uptimeCount > 0 ? Math.round(flaskTotal / uptimeCount) : null,
-						foodUptime: uptimeCount > 0 ? Math.round(foodTotal / uptimeCount) : null,
-						consumableCoverage: { covered: encountersWithConsumable, total: encs.length },
+						flaskUptime:
+							uptimeCount > 0 ? Math.round(flaskTotal / uptimeCount) : null,
+						foodUptime:
+							uptimeCount > 0 ? Math.round(foodTotal / uptimeCount) : null,
+						consumableCoverage: {
+							covered: encountersWithConsumable,
+							total: encs.length,
+						},
 						consumablesByBoss,
 					};
 				})
