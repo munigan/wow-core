@@ -22,16 +22,19 @@ function getValueColor(pct: number | null, higherIsBetter: boolean): string {
 	return "text-danger";
 }
 
-function MetricChange({ pct }: { pct: number | null }) {
+function MetricChange({
+	pct,
+	colorClass,
+}: { pct: number | null; colorClass: string }) {
 	if (pct === null) return null;
 	const isPositive = pct > 0;
 
 	return (
 		<span className="flex items-center gap-1 text-dimmed">
 			{isPositive ? (
-				<TrendingUp className="size-3" />
+				<TrendingUp className={`size-3 ${colorClass}`} />
 			) : (
-				<TrendingDown className="size-3" />
+				<TrendingDown className={`size-3 ${colorClass}`} />
 			)}
 			<span className="font-body text-2xs font-semibold">
 				{isPositive ? "+" : ""}
@@ -196,7 +199,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 							>
 								{formatNumber(raidDps)}
 							</span>
-							<MetricChange pct={dpsPct} />
+							<MetricChange pct={dpsPct} colorClass={getValueColor(dpsPct, true)} />
 						</div>
 						<div className="flex flex-col gap-2 border border-border bg-card p-4">
 							<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
@@ -207,7 +210,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 							>
 								{formatDuration(raid.durationMs ?? 0)}
 							</span>
-							<MetricChange pct={durPct} />
+							<MetricChange pct={durPct} colorClass={getValueColor(durPct, false)} />
 						</div>
 						<div className="flex flex-col gap-2 border border-border bg-card p-4">
 							<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
@@ -218,7 +221,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 							>
 								{data.totalConsumables}
 							</span>
-							<MetricChange pct={consPct} />
+							<MetricChange pct={consPct} colorClass={getValueColor(consPct, true)} />
 						</div>
 						<div className="flex flex-col gap-2 border border-border bg-card p-4">
 							<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
@@ -229,7 +232,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 							>
 								{data.totalDeaths}
 							</span>
-							<MetricChange pct={deathPct} />
+							<MetricChange pct={deathPct} colorClass={getValueColor(deathPct, false)} />
 						</div>
 					</div>
 				);

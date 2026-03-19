@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { HydrateClient, trpc } from "@/lib/trpc/server";
-import { OverviewAttendance } from "./overview-attendance";
-import { OverviewConsumables } from "./overview-consumables";
-import { OverviewDeathsPerformance } from "./overview-deaths-performance";
-import { OverviewMetrics } from "./overview-metrics";
+import { OverviewClassDistribution } from "./overview-class-distribution";
+import { OverviewQuickStats } from "./overview-quick-stats";
 
 export const metadata: Metadata = {
 	title: "Overview",
@@ -12,10 +10,8 @@ export const metadata: Metadata = {
 
 export default async function DashboardPage() {
 	await connection();
-	void trpc.overview.getMetrics.prefetch();
-	void trpc.overview.getAttendance.prefetch();
-	void trpc.overview.getConsumableCompliance.prefetch();
-	void trpc.overview.getDeathsAndPerformance.prefetch();
+	void trpc.overview.getQuickStats.prefetch();
+	void trpc.overview.getClassDistribution.prefetch();
 
 	return (
 		<HydrateClient>
@@ -28,10 +24,10 @@ export default async function DashboardPage() {
 						{"// Raid Core Analyzer"}
 					</p>
 				</div>
-				<OverviewMetrics />
-				<OverviewAttendance />
-				<OverviewConsumables />
-				<OverviewDeathsPerformance />
+				<div className="grid grid-cols-2 items-stretch gap-4">
+					<OverviewQuickStats />
+					<OverviewClassDistribution />
+				</div>
 			</div>
 		</HydrateClient>
 	);
