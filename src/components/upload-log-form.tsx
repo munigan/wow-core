@@ -438,8 +438,7 @@ export function UploadLogForm({
 			} else {
 				setState({
 					step: "error",
-					message:
-						error instanceof Error ? error.message : "Upload failed",
+					message: error instanceof Error ? error.message : "Upload failed",
 				});
 			}
 		});

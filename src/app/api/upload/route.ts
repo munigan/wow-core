@@ -23,8 +23,8 @@ const r2 = new S3Client({
 	region: "auto",
 	endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
 	credentials: {
-		accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-		secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+		accessKeyId: process.env.R2_ACCESS_KEY_ID as string,
+		secretAccessKey: process.env.R2_SECRET_ACCESS_KEY as string,
 	},
 });
 
@@ -44,7 +44,9 @@ const uploadBodySchema = z.object({
 	),
 });
 
-type SelectedRaidPayload = z.infer<typeof uploadBodySchema>["selectedRaids"][number];
+type SelectedRaidPayload = z.infer<
+	typeof uploadBodySchema
+>["selectedRaids"][number];
 
 async function saveRaidToDb(
 	tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
@@ -258,13 +260,10 @@ export async function POST(request: Request) {
 	const activeCoreId = session.session.activeOrganizationId;
 	const hasInvalidCore = selectedRaids.some((r) => r.coreId !== activeCoreId);
 	if (!activeCoreId || hasInvalidCore) {
-		return Response.json(
-			{ error: "Invalid core selection" },
-			{ status: 403 },
-		);
+		return Response.json({ error: "Invalid core selection" }, { status: 403 });
 	}
 
-	const bucket = process.env.R2_BUCKET_NAME!;
+	const bucket = process.env.R2_BUCKET_NAME as string;
 
 	try {
 		// Fetch file from R2
@@ -293,11 +292,7 @@ export async function POST(request: Request) {
 		const results = await db.transaction(async (tx) => {
 			const raidResults = [];
 			for (let i = 0; i < parsedRaids.length; i++) {
-				const result = await saveRaidToDb(
-					tx,
-					parsedRaids[i],
-					selectedRaids[i],
-				);
+				const result = await saveRaidToDb(tx, parsedRaids[i], selectedRaids[i]);
 				raidResults.push(result);
 			}
 			return raidResults;
