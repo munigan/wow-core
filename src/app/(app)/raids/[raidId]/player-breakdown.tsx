@@ -518,9 +518,9 @@ export function PlayerBreakdown({
 												<TooltipContent side="top">
 													<TooltipLabel>Consumables</TooltipLabel>
 													<div className="flex flex-col gap-1">
-														{potItems.map((item) => (
+														{potItems.map((item, index) => (
 															<div
-																key={item.spellName}
+																key={index}
 																className="flex items-center justify-between gap-6 font-body text-xs"
 															>
 																<span className="text-accent">
@@ -556,9 +556,9 @@ export function PlayerBreakdown({
 												<TooltipContent side="top">
 													<TooltipLabel>Consumables</TooltipLabel>
 													<div className="flex flex-col gap-1">
-														{engiItems.map((item) => (
+														{engiItems.map((item, index) => (
 															<div
-																key={item.spellName}
+																key={index}
 																className="flex items-center justify-between gap-6 font-body text-xs"
 															>
 																<span className="text-accent">

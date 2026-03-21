@@ -294,10 +294,19 @@ export const raidsRouter = createTRPCRouter({
 			let totalConsumables = 0;
 			if (encounterIdsForRaid.length > 0) {
 				const [consumableResult] = await db
-					.select({ total: count() })
+					.select({ total: sum(consumableUses.count) })
 					.from(consumableUses)
-					.where(inArray(consumableUses.encounterId, encounterIdsForRaid));
-				totalConsumables = consumableResult?.total ?? 0;
+					.where(
+						and(
+							inArray(consumableUses.encounterId, encounterIdsForRaid),
+							inArray(consumableUses.type, [
+								"potion",
+								"mana_potion",
+								"engineering",
+							]),
+						),
+					);
+				totalConsumables = Number(consumableResult?.total ?? 0);
 			}
 
 			return {

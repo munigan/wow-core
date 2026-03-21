@@ -67,13 +67,16 @@ export const overviewRouter = createTRPCRouter({
 
 		const encounterIds = encounterRows.map((e) => e.id);
 
-		// Get roster member names for filtering
+		// Get roster member names and classes for filtering
 		const rosterMembers = await db
-			.select({ name: members.name })
+			.select({ name: members.name, class: members.class })
 			.from(members)
 			.where(eq(members.coreId, ctx.coreId));
 
 		const rosterNames = new Set(rosterMembers.map((m) => m.name));
+		const rosterClassMap = new Map(
+			rosterMembers.map((m) => [m.name, m.class]),
+		);
 
 		// TOP DPS: sum damage / sum duration for kill encounters per player
 		const killEncounters = await db
@@ -86,7 +89,8 @@ export const overviewRouter = createTRPCRouter({
 				and(inArray(encounters.raidId, raidIds), eq(encounters.result, "kill")),
 			);
 
-		let topDps: { name: string; value: number } | null = null;
+		let topDps: { name: string; class: string | null; value: number } | null =
+			null;
 		if (killEncounters.length > 0) {
 			const killEncounterIds = killEncounters.map((e) => e.id);
 			const durationMap = new Map(
@@ -127,7 +131,11 @@ export const overviewRouter = createTRPCRouter({
 						: 0;
 				if (dps > bestDps) {
 					bestDps = dps;
-					topDps = { name, value: Math.round(dps) };
+					topDps = {
+						name,
+						class: rosterClassMap.get(name) ?? null,
+						value: Math.round(dps),
+					};
 				}
 			}
 		}
@@ -152,6 +160,7 @@ export const overviewRouter = createTRPCRouter({
 
 		let mostAttended: {
 			name: string;
+			class: string | null;
 			attended: number;
 			total: number;
 		} | null = null;
@@ -159,7 +168,12 @@ export const overviewRouter = createTRPCRouter({
 		for (const [name, raidSet] of playerRaids) {
 			if (raidSet.size > maxAttended) {
 				maxAttended = raidSet.size;
-				mostAttended = { name, attended: raidSet.size, total: totalRaids };
+				mostAttended = {
+					name,
+					class: rosterClassMap.get(name) ?? null,
+					attended: raidSet.size,
+					total: totalRaids,
+				};
 			}
 		}
 
@@ -181,7 +195,11 @@ export const overviewRouter = createTRPCRouter({
 			);
 		}
 
-		let bestSurvival: { name: string; value: number } | null = null;
+		let bestSurvival: {
+			name: string;
+			class: string | null;
+			value: number;
+		} | null = null;
 		let lowestDeathRate = Number.POSITIVE_INFINITY;
 		for (const [name, raidSet] of playerRaids) {
 			const deaths = playerDeathCounts.get(name) ?? 0;
@@ -192,6 +210,7 @@ export const overviewRouter = createTRPCRouter({
 				lowestDeathRate = deathRate;
 				bestSurvival = {
 					name,
+					class: rosterClassMap.get(name) ?? null,
 					value: Math.round(deathRate * 10) / 10,
 				};
 			}
@@ -242,7 +261,11 @@ export const overviewRouter = createTRPCRouter({
 			prePotPairs.set(row.playerGuid, set);
 		}
 
-		let topPrePot: { name: string; value: number } | null = null;
+		let topPrePot: {
+			name: string;
+			class: string | null;
+			value: number;
+		} | null = null;
 		let bestRate = 0;
 		for (const [guid, prePotSet] of prePotPairs) {
 			const totalEncounters = playerEncounterSets.get(guid)?.size ?? 0;
@@ -251,7 +274,11 @@ export const overviewRouter = createTRPCRouter({
 			if (rate > bestRate) {
 				bestRate = rate;
 				const name = guidToName.get(guid) ?? "Unknown";
-				topPrePot = { name, value: Math.round(rate) };
+				topPrePot = {
+					name,
+					class: rosterClassMap.get(name) ?? null,
+					value: Math.round(rate),
+				};
 			}
 		}
 
@@ -286,14 +313,22 @@ export const overviewRouter = createTRPCRouter({
 			}
 		}
 
-		let mostResilient: { name: string; value: number } | null = null;
+		let mostResilient: {
+			name: string;
+			class: string | null;
+			value: number;
+		} | null = null;
 		let lowestAvgDmg = Number.POSITIVE_INFINITY;
 		for (const [name, stats] of playerDamageTaken) {
 			if (stats.encounterCount === 0) continue;
 			const avgDmg = stats.totalDamage / stats.encounterCount;
 			if (avgDmg < lowestAvgDmg) {
 				lowestAvgDmg = avgDmg;
-				mostResilient = { name, value: Math.round(avgDmg) };
+				mostResilient = {
+					name,
+					class: rosterClassMap.get(name) ?? null,
+					value: Math.round(avgDmg),
+				};
 			}
 		}
 
