@@ -105,7 +105,7 @@ The S3 endpoint is derived: `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`
 
 ## Dependencies
 
-One new package: `@aws-sdk/client-s3` (includes `@aws-sdk/s3-request-presigner`).
+Two new packages: `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner`.
 
 ## Files Changed
 
