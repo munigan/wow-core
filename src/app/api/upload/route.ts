@@ -1,7 +1,13 @@
+import {
+	DeleteObjectCommand,
+	GetObjectCommand,
+	S3Client,
+} from "@aws-sdk/client-s3";
 import type { ParsedRaid, RaidSelection } from "@munigan/wow-combatlog-parser";
 import { FileTooLargeError, parseLog } from "@munigan/wow-combatlog-parser";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { headers } from "next/headers";
+import { z } from "zod/v4";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { buffUptimes } from "@/lib/db/schema/buff-uptimes";
@@ -13,14 +19,32 @@ import { members } from "@/lib/db/schema/members";
 import { playerDeaths } from "@/lib/db/schema/player-deaths";
 import { raids } from "@/lib/db/schema/raids";
 
-type SelectedRaidPayload = {
-	dates: string[];
-	startTime: string;
-	endTime: string;
-	timeRanges?: { startTime: string; endTime: string }[];
-	coreId: string;
-	raidName: string;
-};
+const r2 = new S3Client({
+	region: "auto",
+	endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+	credentials: {
+		accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+		secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+	},
+});
+
+const uploadBodySchema = z.object({
+	key: z.string(),
+	selectedRaids: z.array(
+		z.object({
+			dates: z.array(z.string()),
+			startTime: z.string(),
+			endTime: z.string(),
+			timeRanges: z
+				.array(z.object({ startTime: z.string(), endTime: z.string() }))
+				.optional(),
+			coreId: z.string(),
+			raidName: z.string(),
+		}),
+	),
+});
+
+type SelectedRaidPayload = z.infer<typeof uploadBodySchema>["selectedRaids"][number];
 
 async function saveRaidToDb(
 	tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
@@ -217,32 +241,45 @@ export async function POST(request: Request) {
 		return Response.json({ error: "Unauthorized" }, { status: 401 });
 	}
 
-	const body = request.body;
-	if (!body) {
-		return Response.json({ error: "No file provided" }, { status: 400 });
+	const parsed = uploadBodySchema.safeParse(await request.json());
+	if (!parsed.success) {
+		return Response.json({ error: "Invalid request body" }, { status: 400 });
 	}
 
-	const selectedRaidsHeader = requestHeaders.get("X-Selected-Raids");
-	if (!selectedRaidsHeader) {
+	const { key, selectedRaids } = parsed.data;
+
+	// Verify the key belongs to this user
+	const expectedPrefix = `uploads/${session.user.id}/`;
+	if (!key.startsWith(expectedPrefix)) {
+		return Response.json({ error: "Invalid file key" }, { status: 403 });
+	}
+
+	// Verify all selected raids target the user's active core
+	const activeCoreId = session.session.activeOrganizationId;
+	const hasInvalidCore = selectedRaids.some((r) => r.coreId !== activeCoreId);
+	if (!activeCoreId || hasInvalidCore) {
 		return Response.json(
-			{ error: "Missing X-Selected-Raids header" },
-			{ status: 400 },
+			{ error: "Invalid core selection" },
+			{ status: 403 },
 		);
 	}
 
-	try {
-		const selectedRaids: SelectedRaidPayload[] =
-			JSON.parse(selectedRaidsHeader);
+	const bucket = process.env.R2_BUCKET_NAME!;
 
-		// Verify all selected raids target the user's active core
-		const activeCoreId = session.session.activeOrganizationId;
-		const hasInvalidCore = selectedRaids.some((r) => r.coreId !== activeCoreId);
-		if (!activeCoreId || hasInvalidCore) {
+	try {
+		// Fetch file from R2
+		const r2Response = await r2.send(
+			new GetObjectCommand({ Bucket: bucket, Key: key }),
+		);
+
+		if (!r2Response.Body) {
 			return Response.json(
-				{ error: "Invalid core selection" },
-				{ status: 403 },
+				{ error: "File not found in storage" },
+				{ status: 404 },
 			);
 		}
+
+		const stream = r2Response.Body.transformToWebStream();
 
 		const raidSelections: RaidSelection[] = selectedRaids.map((r) => ({
 			dates: r.dates,
@@ -251,12 +288,16 @@ export async function POST(request: Request) {
 			timeRanges: r.timeRanges,
 		}));
 
-		const { raids: parsedRaids } = await parseLog(body, raidSelections);
+		const { raids: parsedRaids } = await parseLog(stream, raidSelections);
 
 		const results = await db.transaction(async (tx) => {
 			const raidResults = [];
 			for (let i = 0; i < parsedRaids.length; i++) {
-				const result = await saveRaidToDb(tx, parsedRaids[i], selectedRaids[i]);
+				const result = await saveRaidToDb(
+					tx,
+					parsedRaids[i],
+					selectedRaids[i],
+				);
 				raidResults.push(result);
 			}
 			return raidResults;
@@ -271,5 +312,10 @@ export async function POST(request: Request) {
 		const message =
 			error instanceof Error ? error.message : "Failed to process log file";
 		return Response.json({ error: message }, { status: 500 });
+	} finally {
+		// Best-effort cleanup: delete the R2 object
+		await r2
+			.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))
+			.catch(() => {});
 	}
 }
