@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
+import { Suspense } from "react";
 import { Providers } from "./providers";
 import "./globals.css";
 
