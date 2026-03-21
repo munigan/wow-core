@@ -360,49 +360,6 @@ export function UploadLogForm({
 			progress: 0,
 		});
 
-		const xhr = new XMLHttpRequest();
-		xhrRef.current = xhr;
-
-		xhr.upload.onprogress = (e) => {
-			if (e.lengthComputable) {
-				const progress = Math.round((e.loaded / e.total) * 100);
-				setState((prev) =>
-					prev.step === "uploading" ? { ...prev, progress } : prev,
-				);
-			}
-		};
-
-		xhr.onload = () => {
-			try {
-				const data = JSON.parse(xhr.responseText);
-				if (xhr.status >= 200 && xhr.status < 300) {
-					const results: UploadResult[] = Array.isArray(data) ? data : [data];
-					setState({ step: "done", results });
-				} else {
-					setState({
-						step: "error",
-						message: data.error ?? "Upload failed",
-					});
-				}
-			} catch {
-				setState({
-					step: "error",
-					message: "Invalid server response",
-				});
-			}
-		};
-
-		xhr.onerror = () => {
-			setState({
-				step: "error",
-				message: "Network error during upload",
-			});
-		};
-
-		xhr.onabort = () => {
-			setState({ step: "select" });
-		};
-
 		const selectedPayload = state.raids
 			.map((raid, i) => ({ raid, config: state.raidConfigs[i] }))
 			.filter(({ config }) => config?.isSelected)
@@ -415,10 +372,77 @@ export function UploadLogForm({
 				raidName: formatRaidLabel(raid),
 			}));
 
-		xhr.open("POST", "/api/upload");
-		xhr.setRequestHeader("Content-Type", "application/octet-stream");
-		xhr.setRequestHeader("X-Selected-Raids", JSON.stringify(selectedPayload));
-		xhr.send(file);
+		const run = async () => {
+			// Step 1: Get pre-signed URL
+			const presignRes = await fetch("/api/upload/presign", {
+				method: "POST",
+			});
+
+			if (!presignRes.ok) {
+				const data = await presignRes.json();
+				throw new Error(data.error ?? "Failed to get upload URL");
+			}
+
+			const { url, key } = await presignRes.json();
+
+			// Step 2: Upload file directly to R2 via XHR (for progress tracking)
+			await new Promise<void>((resolve, reject) => {
+				const xhr = new XMLHttpRequest();
+				xhrRef.current = xhr;
+
+				xhr.upload.onprogress = (e) => {
+					if (e.lengthComputable) {
+						const progress = Math.round((e.loaded / e.total) * 100);
+						setState((prev) =>
+							prev.step === "uploading" ? { ...prev, progress } : prev,
+						);
+					}
+				};
+
+				xhr.onload = () => {
+					if (xhr.status >= 200 && xhr.status < 300) {
+						resolve();
+					} else {
+						reject(new Error("Failed to upload file to storage"));
+					}
+				};
+
+				xhr.onerror = () => reject(new Error("Network error during upload"));
+				xhr.onabort = () => reject(new Error("Upload cancelled"));
+
+				xhr.open("PUT", url);
+				xhr.setRequestHeader("Content-Type", "application/octet-stream");
+				xhr.send(file);
+			});
+
+			// Step 3: Tell server to parse the uploaded file
+			const parseRes = await fetch("/api/upload", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ key, selectedRaids: selectedPayload }),
+			});
+
+			const data = await parseRes.json();
+
+			if (!parseRes.ok) {
+				throw new Error(data.error ?? "Failed to process log file");
+			}
+
+			const results: UploadResult[] = Array.isArray(data) ? data : [data];
+			setState({ step: "done", results });
+		};
+
+		run().catch((error) => {
+			if (error instanceof Error && error.message === "Upload cancelled") {
+				setState({ step: "select" });
+			} else {
+				setState({
+					step: "error",
+					message:
+						error instanceof Error ? error.message : "Upload failed",
+				});
+			}
+		});
 	}, [state]);
 
 	const handleCancel = () => {
