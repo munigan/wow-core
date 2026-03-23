@@ -30,6 +30,10 @@
 # mcp/tools
 .playwright-mcp/
 .superpowers/
+.opencode/
+
+# design docs
+docs/plans/
 
 # combat logs
 example-logs/
