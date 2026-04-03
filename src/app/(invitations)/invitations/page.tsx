@@ -41,7 +41,7 @@ export default async function InvitationsPage() {
 				invitations={invitations.map((inv) => ({
 					id: inv.id,
 					organizationName:
-						(inv as Record<string, unknown>).organizationName as string ??
+						((inv as Record<string, unknown>).organizationName as string) ??
 						"Unknown Core",
 					organizationId: inv.organizationId,
 				}))}

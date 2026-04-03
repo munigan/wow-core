@@ -114,9 +114,7 @@ export function CoreSettingsForm({
 							<span className="font-body text-2xs font-bold uppercase tracking-wide text-dimmed">
 								Name
 							</span>
-							<span className="font-body text-sm text-primary">
-								{name}
-							</span>
+							<span className="font-body text-sm text-primary">{name}</span>
 						</div>
 						<div className="flex items-center gap-6">
 							<div className="flex flex-col gap-1">

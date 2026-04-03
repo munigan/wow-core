@@ -43,9 +43,7 @@ export default async function SettingsPage() {
 				<CoreSettingsForm
 					organizationId={fullOrg.id}
 					name={fullOrg.name}
-					realm={
-						(fullOrg as unknown as Record<string, string>).realm ?? ""
-					}
+					realm={(fullOrg as unknown as Record<string, string>).realm ?? ""}
 					raidSize={
 						(fullOrg as unknown as Record<string, string>).raidSize ?? ""
 					}

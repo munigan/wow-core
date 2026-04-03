@@ -18,10 +18,7 @@ export function InvitationsForm({ invitations }: InvitationsFormProps) {
 	const [loadingId, setLoadingId] = useState<string | null>(null);
 	const [handled, setHandled] = useState<Set<string>>(new Set());
 
-	async function handleAccept(
-		invitationId: string,
-		organizationId: string,
-	) {
+	async function handleAccept(invitationId: string, organizationId: string) {
 		setLoadingId(invitationId);
 		await authClient.organization.acceptInvitation({
 			invitationId,

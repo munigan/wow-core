@@ -210,8 +210,8 @@ export function MembersSection({
 					{/* Empty state */}
 					{members.length === 1 && invitations.length === 0 && isOwner && (
 						<p className="pt-2 font-body text-xs text-dimmed">
-							You're the only member. Invite others to share access to
-							this core.
+							You're the only member. Invite others to share access to this
+							core.
 						</p>
 					)}
 				</div>
