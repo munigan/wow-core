@@ -19,6 +19,7 @@
 		"@base-ui/react": "1.2.0",
 		"@hookform/resolvers": "5.2.2",
 		"@munigan/wow-combatlog-parser": "0.1.1",
+		"@react-email/components": "1.0.11",
 		"@tanstack/react-query": "5.90.21",
 		"@trpc/client": "11.12.0",
 		"@trpc/react-query": "11.12.0",
@@ -33,6 +34,7 @@
 		"react-dom": "19.2.3",
 		"react-hook-form": "7.71.2",
 		"recharts": "3.8.0",
+		"resend": "6.10.0",
 		"tailwind-merge": "3.5.0",
 		"tailwind-variants": "3.2.2",
 		"zod": "4.3.6"
