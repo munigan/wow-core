@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization } from "better-auth/plugins";
 import { db } from "@/lib/db";
 import { schema } from "@/lib/db/schema";
+import { resend } from "@/lib/resend";
 
 export const auth = betterAuth({
 	database: drizzleAdapter(db, {
@@ -35,6 +36,14 @@ export const auth = betterAuth({
 	},
 	plugins: [
 		organization({
+			sendInvitationEmail: async (data) => {
+				await resend.emails.send({
+					from: process.env.RESEND_FROM_EMAIL!,
+					to: data.email,
+					subject: `You've been invited to ${data.organization.name}`,
+					text: `${data.inviter.user.name} invited you to join ${data.organization.name} on WoW Raid Tools.\n\nSign up or log in to accept: ${process.env.BETTER_AUTH_URL}/sign-up`,
+				});
+			},
 			schema: {
 				organization: {
 					modelName: "cores",
