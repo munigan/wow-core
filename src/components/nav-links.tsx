@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutDashboard, Swords, Users } from "lucide-react";
+import { LayoutDashboard, Settings, Swords, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { NavItem } from "@/components/ui/nav-item";
 
@@ -8,6 +8,7 @@ const NAV_ITEMS = [
 	{ href: "/", label: "Overview", icon: LayoutDashboard },
 	{ href: "/raids", label: "Raids", icon: Swords },
 	{ href: "/members", label: "Members", icon: Users },
+	{ href: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
 export const NavLinks = () => {
