@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, EyeOff, LogIn, MessageCircle, Sword } from "lucide-react";
+import { Eye, EyeOff, LogIn, Sword } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -58,14 +58,7 @@ export function SignInForm() {
 		router.refresh();
 	}
 
-	async function handleDiscord() {
-		await authClient.signIn.social({
-			provider: "discord",
-			callbackURL: "/",
-		});
-	}
-
-	return (
+return (
 		<form
 			onSubmit={handleSubmit(onSubmitAction)}
 			className="flex w-[420px] flex-col gap-8 border border-border bg-surface p-10"
@@ -146,24 +139,6 @@ export function SignInForm() {
 					{isLoading ? "SIGNING IN..." : "SIGN IN"}
 				</Button>
 
-				<div className="flex w-full items-center gap-3">
-					<div className="h-px flex-1 bg-border" />
-					<span className="font-body text-2xs font-bold tracking-wide text-dimmed">
-						OR
-					</span>
-					<div className="h-px flex-1 bg-border" />
-				</div>
-
-				<Button
-					type="button"
-					variant="secondary"
-					size="lg"
-					className="w-full"
-					onClick={handleDiscord}
-				>
-					<MessageCircle className="h-4 w-4 text-discord" />
-					SIGN IN WITH DISCORD
-				</Button>
 			</div>
 
 			{/* Footer */}
