@@ -266,13 +266,21 @@ body {
 		--scroll-area-overflow-y-start: inherit;
 		top: 0;
 		height: min(32px, var(--scroll-area-overflow-y-start));
-		background: linear-gradient(to bottom, var(--color-sidebar), transparent);
+		background: linear-gradient(
+			to bottom,
+			var(--scroll-area-fade-color, var(--color-sidebar)),
+			transparent
+		);
 	}
 
 	&::after {
 		--scroll-area-overflow-y-end: inherit;
 		bottom: 0;
 		height: min(32px, var(--scroll-area-overflow-y-end, 32px));
-		background: linear-gradient(to top, var(--color-sidebar), transparent);
+		background: linear-gradient(
+			to top,
+			var(--scroll-area-fade-color, var(--color-sidebar)),
+			transparent
+		);
 	}
 }

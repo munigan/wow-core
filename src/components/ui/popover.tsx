@@ -24,16 +24,26 @@ export const PopoverRoot = ({
 export type PopoverTriggerProps = {
 	className?: string;
 	render?: React.ReactElement;
+	openOnHover?: boolean;
+	delay?: number;
 	children: React.ReactNode;
 };
 
 export const PopoverTrigger = ({
 	className,
 	render,
+	openOnHover,
+	delay,
 	children,
 }: PopoverTriggerProps) => {
 	return (
-		<BasePopover.Trigger className={className} render={render}>
+		<BasePopover.Trigger
+			className={className}
+			render={render}
+			nativeButton={render === undefined}
+			openOnHover={openOnHover}
+			delay={delay}
+		>
 			{children}
 		</BasePopover.Trigger>
 	);

@@ -7,6 +7,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { CheckboxRoot } from "@/components/ui/checkbox";
+import {
+	PopoverContent,
+	PopoverRoot,
+	PopoverTrigger,
+} from "@/components/ui/popover";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import {
 	ScrollAreaRoot,
@@ -112,6 +117,19 @@ function formatTimeRange(raid: DetectedRaid): string {
 		});
 	return `${fmt(start)} - ${fmt(end)}`;
 }
+
+const CLASS_COLORS: Record<string, string> = {
+	warrior: "text-class-warrior",
+	paladin: "text-class-paladin",
+	hunter: "text-class-hunter",
+	rogue: "text-class-rogue",
+	priest: "text-class-priest",
+	"death-knight": "text-class-dk",
+	shaman: "text-class-shaman",
+	mage: "text-class-mage",
+	warlock: "text-class-warlock",
+	druid: "text-class-druid",
+};
 
 function computeOverlap(
 	raidPlayerNames: string[],
@@ -453,8 +471,8 @@ export function UploadLogForm({
 
 	const handleDone = () => {
 		onDoneAction();
-		void utils.invalidate();
 		router.push("/raids");
+		void utils.raids.invalidate();
 	};
 
 	const handleDrop = useCallback(
@@ -614,6 +632,64 @@ export function UploadLogForm({
 																	{raid.playerCount} members
 																</span>
 															</div>
+															{raid.players.length > 0 && (
+																<div className="font-body text-2xs text-dimmed">
+																	{(() => {
+																		const sorted = [...raid.players].sort(
+																			(a, b) => a.name.localeCompare(b.name),
+																		);
+																		const preview = sorted.slice(0, 3);
+																		const remaining =
+																			sorted.length - preview.length;
+																		return (
+																			<>
+																				{preview.map((p) => p.name).join(", ")}
+																				{remaining > 0 && (
+																					<PopoverRoot>
+																						<PopoverTrigger
+																							openOnHover
+																							delay={200}
+																							render={<span />}
+																						>
+																							<span className="ml-1 cursor-default text-secondary">
+																								+{remaining} more
+																							</span>
+																						</PopoverTrigger>
+																						<PopoverContent
+																							side="bottom"
+																							align="start"
+																							className="max-w-64 p-3"
+																						>
+																							<ScrollAreaRoot
+																								style={
+																									{
+																										"--scroll-area-fade-color":
+																											"var(--color-elevated)",
+																									} as React.CSSProperties
+																								}
+																							>
+																								<ScrollAreaViewport className="max-h-64">
+																									<div className="flex flex-col gap-0.5">
+																										{sorted.map((player) => (
+																											<span
+																												key={player.guid}
+																												className={`text-2xs ${CLASS_COLORS[player.class ?? ""] ?? "text-secondary"}`}
+																											>
+																												{player.name}
+																											</span>
+																										))}
+																									</div>
+																								</ScrollAreaViewport>
+																								<ScrollAreaScrollbar />
+																							</ScrollAreaRoot>
+																						</PopoverContent>
+																					</PopoverRoot>
+																				)}
+																			</>
+																		);
+																	})()}
+																</div>
+															)}
 														</div>
 														<div className="shrink-0">
 															<SelectRoot
