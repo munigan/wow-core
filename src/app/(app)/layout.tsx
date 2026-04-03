@@ -23,6 +23,12 @@ export default async function AppLayout({
 	});
 
 	if (!orgs || orgs.length === 0) {
+		const pendingInvitations = await auth.api.listUserInvitations({
+			headers: requestHeaders,
+		});
+		if (pendingInvitations && pendingInvitations.length > 0) {
+			redirect("/invitations");
+		}
 		redirect("/setup");
 	}
 
