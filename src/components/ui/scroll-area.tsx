@@ -5,15 +5,20 @@ import { twMerge } from "tailwind-merge";
 
 export type ScrollAreaRootProps = {
 	className?: string;
+	style?: React.CSSProperties;
 	children: React.ReactNode;
 };
 
 export const ScrollAreaRoot = ({
 	className,
+	style,
 	children,
 }: ScrollAreaRootProps) => {
 	return (
-		<BaseScrollArea.Root className={twMerge("relative", className)}>
+		<BaseScrollArea.Root
+			className={twMerge("relative", className)}
+			style={style}
+		>
 			{children}
 		</BaseScrollArea.Root>
 	);

@@ -94,7 +94,14 @@ export function MembersList() {
 		{
 			class: classFilter || undefined,
 			search: search || undefined,
-			sort: sortColumn as "name" | "class" | "raids",
+			sort: sortColumn as
+				| "name"
+				| "class"
+				| "raids"
+				| "pots"
+				| "engi"
+				| "other"
+				| "prepot",
 			direction: sortDir as "asc" | "desc",
 			page,
 			perPage: PER_PAGE,
@@ -217,7 +224,39 @@ export function MembersList() {
 									currentSort={sortColumn}
 									currentDirection={sortDir}
 									onSortAction={handleSort}
-									className="w-20 pr-4"
+									className="w-20"
+								/>
+								<SortHeader
+									label="Pots/Raid"
+									column="pots"
+									currentSort={sortColumn}
+									currentDirection={sortDir}
+									onSortAction={handleSort}
+									className="w-24"
+								/>
+								<SortHeader
+									label="Engi/Raid"
+									column="engi"
+									currentSort={sortColumn}
+									currentDirection={sortDir}
+									onSortAction={handleSort}
+									className="w-24"
+								/>
+								<SortHeader
+									label="Other/Raid"
+									column="other"
+									currentSort={sortColumn}
+									currentDirection={sortDir}
+									onSortAction={handleSort}
+									className="w-24"
+								/>
+								<SortHeader
+									label="Pre-pot %"
+									column="prepot"
+									currentSort={sortColumn}
+									currentDirection={sortDir}
+									onSortAction={handleSort}
+									className="w-24 pr-4"
 								/>
 							</tr>
 						</thead>
@@ -258,8 +297,52 @@ export function MembersList() {
 											</span>
 										</span>
 									</td>
-									<td className="py-2.5 pr-4 text-primary">
-										{member.raidCount}
+									<td className="py-2.5 text-primary">{member.raidCount}</td>
+									<td
+										className={`py-2.5 ${
+											member.avgPotsPerRaid && member.avgPotsPerRaid > 0
+												? "text-primary"
+												: "text-dimmed"
+										}`}
+									>
+										{member.raidCount === 0
+											? "—"
+											: (member.avgPotsPerRaid ?? 0).toFixed(1)}
+									</td>
+									<td
+										className={`py-2.5 ${
+											member.avgEngiPerRaid && member.avgEngiPerRaid > 0
+												? "text-primary"
+												: "text-dimmed"
+										}`}
+									>
+										{member.raidCount === 0
+											? "—"
+											: (member.avgEngiPerRaid ?? 0).toFixed(1)}
+									</td>
+									<td
+										className={`py-2.5 ${
+											member.avgOtherPerRaid && member.avgOtherPerRaid > 0
+												? "text-primary"
+												: "text-dimmed"
+										}`}
+									>
+										{member.raidCount === 0
+											? "—"
+											: (member.avgOtherPerRaid ?? 0).toFixed(1)}
+									</td>
+									<td
+										className={`py-2.5 pr-4 ${
+											member.prePotRate !== null && member.prePotRate >= 80
+												? "text-accent"
+												: member.prePotRate !== null && member.prePotRate >= 50
+													? "text-warning"
+													: "text-dimmed"
+										}`}
+									>
+										{member.raidCount === 0
+											? "—"
+											: `${member.prePotRate ?? 0}%`}
 									</td>
 								</tr>
 							))}

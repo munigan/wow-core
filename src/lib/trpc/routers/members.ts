@@ -9,6 +9,7 @@ import {
 	gte,
 	ilike,
 	inArray,
+	sum,
 } from "drizzle-orm";
 import { z } from "zod/v4";
 import { db } from "@/lib/db";
@@ -55,7 +56,9 @@ export const membersRouter = createTRPCRouter({
 				.object({
 					class: z.string().optional(),
 					search: z.string().optional(),
-					sort: z.enum(["name", "class", "raids"]).optional(),
+					sort: z
+						.enum(["name", "class", "raids", "pots", "engi", "other", "prepot"])
+						.optional(),
 					direction: z.enum(["asc", "desc"]).optional(),
 					page: z.number().int().min(1).optional(),
 					perPage: z.number().int().min(1).max(100).optional(),
@@ -124,23 +127,89 @@ export const membersRouter = createTRPCRouter({
 				raidCounts.map((r) => [r.playerName, r.raidCount]),
 			);
 
-			// Get latest spec per member (from most recent raid)
-			const latestSpecs = await db
-				.select({
-					playerName: encounterPlayers.playerName,
-					spec: encounterPlayers.spec,
-				})
-				.from(encounterPlayers)
-				.innerJoin(encounters, eq(encounterPlayers.encounterId, encounters.id))
-				.innerJoin(raids, eq(encounters.raidId, raids.id))
-				.where(
-					and(
-						inArray(encounterPlayers.playerName, memberNames),
-						eq(raids.coreId, ctx.coreId),
-					),
-				)
-				.orderBy(desc(raids.date))
-				.limit(memberNames.length * 2);
+			// Run enrichment queries in parallel
+			const [latestSpecs, consumableTotals, prePotRows] = await Promise.all([
+				// Latest spec per member (from most recent raid)
+				db
+					.select({
+						playerName: encounterPlayers.playerName,
+						spec: encounterPlayers.spec,
+					})
+					.from(encounterPlayers)
+					.innerJoin(
+						encounters,
+						eq(encounterPlayers.encounterId, encounters.id),
+					)
+					.innerJoin(raids, eq(encounters.raidId, raids.id))
+					.where(
+						and(
+							inArray(encounterPlayers.playerName, memberNames),
+							eq(raids.coreId, ctx.coreId),
+						),
+					)
+					.orderBy(desc(raids.date))
+					.limit(memberNames.length * 2),
+
+				// Consumable totals by type per member
+				db
+					.select({
+						playerName: encounterPlayers.playerName,
+						type: consumableUses.type,
+						totalCount: sum(consumableUses.count).mapWith(Number),
+					})
+					.from(consumableUses)
+					.innerJoin(
+						encounterPlayers,
+						and(
+							eq(consumableUses.encounterId, encounterPlayers.encounterId),
+							eq(consumableUses.playerGuid, encounterPlayers.playerGuid),
+						),
+					)
+					.innerJoin(encounters, eq(consumableUses.encounterId, encounters.id))
+					.innerJoin(raids, eq(encounters.raidId, raids.id))
+					.where(
+						and(
+							inArray(encounterPlayers.playerName, memberNames),
+							eq(raids.coreId, ctx.coreId),
+							inArray(consumableUses.type, [
+								"potion",
+								"mana_potion",
+								"engineering",
+								"flame_cap",
+							]),
+						),
+					)
+					.groupBy(encounterPlayers.playerName, consumableUses.type),
+
+				// Pre-pot rate per member
+				db
+					.select({
+						playerName: encounterPlayers.playerName,
+						totalEncounters: countDistinct(encounterPlayers.encounterId),
+						prePotEncounters: countDistinct(consumableUses.encounterId),
+					})
+					.from(encounterPlayers)
+					.innerJoin(
+						encounters,
+						eq(encounterPlayers.encounterId, encounters.id),
+					)
+					.innerJoin(raids, eq(encounters.raidId, raids.id))
+					.leftJoin(
+						consumableUses,
+						and(
+							eq(consumableUses.encounterId, encounterPlayers.encounterId),
+							eq(consumableUses.playerGuid, encounterPlayers.playerGuid),
+							eq(consumableUses.prePot, true),
+						),
+					)
+					.where(
+						and(
+							inArray(encounterPlayers.playerName, memberNames),
+							eq(raids.coreId, ctx.coreId),
+						),
+					)
+					.groupBy(encounterPlayers.playerName),
+			]);
 
 			// Take first spec found per member (already ordered by most recent)
 			const specMap = new Map<string, string | null>();
@@ -150,16 +219,84 @@ export const membersRouter = createTRPCRouter({
 				}
 			}
 
-			let items = memberRows.map((member) => ({
-				...member,
-				raidCount: raidCountMap.get(member.name) ?? 0,
-				latestSpec: specMap.get(member.name) ?? member.spec,
-			}));
+			// Build consumable totals map
+			const consumableMap = new Map<
+				string,
+				{ pots: number; engi: number; other: number }
+			>();
+			for (const row of consumableTotals) {
+				const entry = consumableMap.get(row.playerName) ?? {
+					pots: 0,
+					engi: 0,
+					other: 0,
+				};
+				if (row.type === "potion" || row.type === "mana_potion") {
+					entry.pots += row.totalCount;
+				} else if (row.type === "engineering") {
+					entry.engi += row.totalCount;
+				} else if (row.type === "flame_cap") {
+					entry.other += row.totalCount;
+				}
+				consumableMap.set(row.playerName, entry);
+			}
 
-			// Sort by computed column (raids) in JS
-			if (sortCol === "raids") {
+			// Build pre-pot rate map
+			const prePotMap = new Map<string, number>();
+			for (const row of prePotRows) {
+				const rate =
+					row.totalEncounters > 0
+						? Math.round((row.prePotEncounters / row.totalEncounters) * 100)
+						: 0;
+				prePotMap.set(row.playerName, rate);
+			}
+
+			// Merge all data
+			let items = memberRows.map((member) => {
+				const raidCount = raidCountMap.get(member.name) ?? 0;
+				const consumables = consumableMap.get(member.name) ?? {
+					pots: 0,
+					engi: 0,
+					other: 0,
+				};
+				return {
+					...member,
+					raidCount,
+					latestSpec: specMap.get(member.name) ?? member.spec,
+					avgPotsPerRaid: raidCount > 0 ? consumables.pots / raidCount : null,
+					avgEngiPerRaid: raidCount > 0 ? consumables.engi / raidCount : null,
+					avgOtherPerRaid: raidCount > 0 ? consumables.other / raidCount : null,
+					prePotRate: prePotMap.get(member.name) ?? null,
+				};
+			});
+
+			// Sort by computed columns in JS
+			const computedSortCols = ["raids", "pots", "engi", "other", "prepot"];
+			if (computedSortCols.includes(sortCol)) {
 				const dir = sortDir === "asc" ? 1 : -1;
-				items = items.sort((a, b) => dir * (a.raidCount - b.raidCount));
+				const getVal = (item: (typeof items)[0]): number | null => {
+					switch (sortCol) {
+						case "raids":
+							return item.raidCount;
+						case "pots":
+							return item.avgPotsPerRaid;
+						case "engi":
+							return item.avgEngiPerRaid;
+						case "other":
+							return item.avgOtherPerRaid;
+						case "prepot":
+							return item.prePotRate;
+						default:
+							return 0;
+					}
+				};
+				items = items.sort((a, b) => {
+					const aVal = getVal(a);
+					const bVal = getVal(b);
+					if (aVal === null && bVal === null) return 0;
+					if (aVal === null) return 1;
+					if (bVal === null) return -1;
+					return dir * (aVal - bVal);
+				});
 			}
 
 			return { items, totalCount };
