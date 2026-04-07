@@ -1,0 +1,50 @@
+{
+	"pages": {
+		"/_app": [
+			"static/chunks/defce_next_dist_compiled_199fc9aa._.js",
+			"static/chunks/defce_next_dist_shared_lib_af941ee6._.js",
+			"static/chunks/defce_next_dist_client_5f228d26._.js",
+			"static/chunks/defce_next_dist_54a384c1._.js",
+			"static/chunks/defce_next_app_02749a81.js",
+			"static/chunks/[next]_entry_page-loader_ts_0ce083f5._.js",
+			"static/chunks/5e54f_react-dom_4d21b075._.js",
+			"static/chunks/node_modules__pnpm_fd60bec7._.js",
+			"static/chunks/[root-of-the-server]__cbb591aa._.js",
+			"static/chunks/_claude_worktrees_condescending-proskuriakova_pages__app_2da965e7._.js",
+			"static/chunks/turbopack-_claude_worktrees_condescending-proskuriakova_pages__app_e9eb49ca._.js"
+		],
+		"/_error": [
+			"static/chunks/defce_next_dist_compiled_199fc9aa._.js",
+			"static/chunks/defce_next_dist_shared_lib_58bf90f5._.js",
+			"static/chunks/defce_next_dist_client_5f228d26._.js",
+			"static/chunks/defce_next_dist_dc9e9a66._.js",
+			"static/chunks/defce_next_error_60ed2946.js",
+			"static/chunks/[next]_entry_page-loader_ts_8a002227._.js",
+			"static/chunks/5e54f_react-dom_4d21b075._.js",
+			"static/chunks/node_modules__pnpm_fd60bec7._.js",
+			"static/chunks/[root-of-the-server]__cd678636._.js",
+			"static/chunks/_claude_worktrees_condescending-proskuriakova_pages__error_2da965e7._.js",
+			"static/chunks/turbopack-_claude_worktrees_condescending-proskuriakova_pages__error_ffb9fa15._.js"
+		]
+	},
+	"devFiles": [],
+	"polyfillFiles": [
+		"static/chunks/6ee4a_next_dist_build_polyfills_polyfill-nomodule.js"
+	],
+	"lowPriorityFiles": [
+		"static/development/_ssgManifest.js",
+		"static/development/_buildManifest.js"
+	],
+	"rootMainFiles": [
+		"static/chunks/[turbopack]_browser_dev_hmr-client_hmr-client_ts_88f427b5._.js",
+		"static/chunks/6ee4a_next_dist_compiled_react-dom_3c591daf._.js",
+		"static/chunks/6ee4a_next_dist_compiled_react-server-dom-turbopack_54ac8959._.js",
+		"static/chunks/6ee4a_next_dist_compiled_next-devtools_index_c1624193.js",
+		"static/chunks/6ee4a_next_dist_compiled_a1c913cb._.js",
+		"static/chunks/6ee4a_next_dist_client_8a7b27f9._.js",
+		"static/chunks/6ee4a_next_dist_40bb6b2a._.js",
+		"static/chunks/11815_@swc_helpers_cjs_88d84339._.js",
+		"static/chunks/_claude_worktrees_condescending-proskuriakova_a0ff3932._.js",
+		"static/chunks/turbopack-_claude_worktrees_condescending-proskuriakova_aef133cd._.js"
+	]
+}

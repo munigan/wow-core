@@ -1,0 +1,18 @@
+[00:01:49.964] Server  LOG     ○ Compiling /_not-found/page ...
+[00:01:50.127] Server  ERROR   ⨯ PageNotFoundError: Cannot find module for page: route not found /_not-found/page
+[00:01:50.131] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/Users/diegofernandes/www/wow-core/.claude/worktrees/condescending-proskuriakova/src/app'
+[00:01:50.132] Server  ERROR   ⨯ "unhandledRejection:" Error: ENOENT: no such file or directory, scandir '/Users/diegofernandes/www/wow-core/.claude/worktrees/condescending-proskuriakova/src/app'
+[00:01:50.133] Server  ERROR   ⨯ "unhandledRejection: " Error: ENOENT: no such file or directory, scandir '/Users/diegofernandes/www/wow-core/.claude/worktrees/condescending-proskuriakova/src/app'
+[00:01:50.134] Server  LOG     ✓ Compiled in 12.8s
+[00:01:50.875] Server  ERROR   Error: ENOENT: no such file or directory, open '/Users/diegofernandes/www/wow-core/.claude/worktrees/condescending-proskuriakova/.next/dev/static/development/_buildManifest.js.tmp.updchb8hbc'
+[00:01:50.876] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/Users/diegofernandes/www/wow-core/.claude/worktrees/condescending-proskuriakova/src/app'
+[00:01:50.881] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/Users/diegofernandes/www/wow-core/.claude/worktrees/condescending-proskuriakova/src/app'
+[00:01:50.882] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/Users/diegofernandes/www/wow-core/.claude/worktrees/condescending-proskuriakova/src/app'
+[00:01:50.891] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/Users/diegofernandes/www/wow-core/.claude/worktrees/condescending-proskuriakova/src/app'
+[00:01:50.892] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/Users/diegofernandes/www/wow-core/.claude/worktrees/condescending-proskuriakova/src/app'
+[00:01:50.895] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/Users/diegofernandes/www/wow-core/.claude/worktrees/condescending-proskuriakova/src/app'
+[00:01:50.896] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/Users/diegofernandes/www/wow-core/.claude/worktrees/condescending-proskuriakova/src/app'
+[00:02:14.481] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/Users/diegofernandes/www/wow-core/.claude/worktrees/condescending-proskuriakova/src/app'
+[00:02:14.483] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/Users/diegofernandes/www/wow-core/.claude/worktrees/condescending-proskuriakova/src/app'
+[00:02:18.234] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/Users/diegofernandes/www/wow-core/.claude/worktrees/condescending-proskuriakova/src/app'
+[00:02:18.236] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/Users/diegofernandes/www/wow-core/.claude/worktrees/condescending-proskuriakova/src/app'
