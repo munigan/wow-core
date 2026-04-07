@@ -1,4 +1,11 @@
-import { integer, pgTable, real, smallint, text, uuid } from "drizzle-orm/pg-core";
+import {
+	integer,
+	pgTable,
+	real,
+	smallint,
+	text,
+	uuid,
+} from "drizzle-orm/pg-core";
 import { encounters } from "./encounters";
 
 export const externalBuffs = pgTable("external_buffs", {

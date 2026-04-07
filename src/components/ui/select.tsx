@@ -2,8 +2,8 @@
 
 import { Select as BaseSelect } from "@base-ui/react/select";
 import { Check, ChevronDown } from "lucide-react";
-import { tv } from "tailwind-variants";
 import { twMerge } from "tailwind-merge";
+import { tv } from "tailwind-variants";
 
 export type SelectOption = {
 	value: string;
@@ -65,9 +65,7 @@ export const SelectTrigger = ({
 	size,
 }: SelectTriggerProps) => {
 	return (
-		<BaseSelect.Trigger
-			className={triggerVariants({ size, className })}
-		>
+		<BaseSelect.Trigger className={triggerVariants({ size, className })}>
 			<BaseSelect.Value
 				placeholder={placeholder}
 				className="min-w-0 truncate"

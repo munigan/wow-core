@@ -32,9 +32,10 @@ On hover over "+N more", a popover appears with the full player list:
 - Uses existing `PopoverRoot` / `PopoverTrigger` / `PopoverContent` components
 - `PopoverTrigger` uses `openOnHover` prop (supported by Base UI)
 - Players listed alphabetically, each name colored by WoW class using existing `text-class-*` Tailwind utilities
+- Fallback to `text-secondary` when `class` is `null` (matches existing pattern in `members-list.tsx`)
 - Class color map: reuse the same `CLASS_COLORS` pattern already in `members-list.tsx`, `player-breakdown.tsx`, etc.
 - Popover positioned `side="bottom"`, `align="start"`
-- Max height with scroll if needed (handles 40-man raids)
+- Max height with scroll via `ScrollAreaRoot`/`ScrollAreaViewport` (already imported in the file)
 
 ### Class Color Mapping
 
@@ -59,12 +60,16 @@ const CLASS_COLORS: Record<string, string> = {
 
 `DetectedRaid.players: PlayerInfo[]` — already returned by `scanLog()` and available in the `choose` step state. Each `PlayerInfo` has `name`, `class`, and `spec`. No parser or API changes needed.
 
+### Edge Cases
+
+- `raid.players` empty: hide the preview line entirely
+- "+N more" count uses `raid.players.length - 3` (not `raid.playerCount`)
+- Inline preview names are NOT class-colored (keeps card clean); only the popover uses class colors
+
 ## Scope
 
-- Single file change: `src/components/upload-log-form.tsx`
-- Add the `CLASS_COLORS` map (local to the file)
-- Add inline preview text below the metadata line
-- Add popover with class-colored player list on "+N more" hover
+- `src/components/ui/popover.tsx`: extend `PopoverTrigger` with `openOnHover` and `delay` props (currently not forwarded to Base UI)
+- `src/components/upload-log-form.tsx`: add `CLASS_COLORS` map, inline preview, and hover popover
 - Import `PopoverRoot`, `PopoverTrigger`, `PopoverContent` from UI lib
 
 ## Out of Scope

@@ -61,7 +61,7 @@ export function SignUpForm() {
 		router.refresh();
 	}
 
-return (
+	return (
 		<form
 			onSubmit={handleSubmit(onSubmitAction)}
 			className="flex w-[420px] flex-col gap-8 border border-border bg-surface p-10"
@@ -140,7 +140,6 @@ return (
 					<UserPlus className="h-3.5 w-3.5" />
 					{isLoading ? "CREATING ACCOUNT..." : "CREATE ACCOUNT"}
 				</Button>
-
 			</div>
 
 			{/* Footer */}

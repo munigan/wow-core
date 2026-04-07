@@ -37,8 +37,8 @@ export function InvitationEmail({
 							<Text className="m-0 mb-4 text-base leading-6 text-[#A0A0A0]">
 								<strong className="text-[#E5E5E5]">{inviterName}</strong>{" "}
 								invited you to join{" "}
-								<strong className="text-[#E5E5E5]">{coreName}</strong> on
-								WoW Raid Tools.
+								<strong className="text-[#E5E5E5]">{coreName}</strong> on WoW
+								Raid Tools.
 							</Text>
 							<Button
 								href={acceptUrl}
@@ -48,8 +48,8 @@ export function InvitationEmail({
 							</Button>
 							<Hr className="my-6 border-[#1E1E1E]" />
 							<Text className="m-0 text-xs text-[#666666]">
-								If you didn't expect this invitation, you can safely ignore
-								this email.
+								If you didn't expect this invitation, you can safely ignore this
+								email.
 							</Text>
 						</Section>
 					</Container>

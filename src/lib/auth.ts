@@ -1,12 +1,14 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization } from "better-auth/plugins";
+import { InvitationEmail } from "@/emails/invitation";
 import { db } from "@/lib/db";
 import { schema } from "@/lib/db/schema";
-import { InvitationEmail } from "@/emails/invitation";
+import { getPublicAppOrigin } from "@/lib/public-app-url";
 import { resend } from "@/lib/resend";
 
 export const auth = betterAuth({
+	baseURL: getPublicAppOrigin(),
 	database: drizzleAdapter(db, {
 		provider: "pg",
 		schema: {
@@ -23,7 +25,7 @@ export const auth = betterAuth({
 	emailAndPassword: {
 		enabled: true,
 	},
-user: {
+	user: {
 		modelName: "users",
 	},
 	session: {
@@ -39,7 +41,7 @@ user: {
 					react: InvitationEmail({
 						inviterName: data.inviter.user.name,
 						coreName: data.organization.name,
-						acceptUrl: `${process.env.BETTER_AUTH_URL}/sign-up`,
+						acceptUrl: `${getPublicAppOrigin()}/sign-up`,
 					}),
 				});
 			},

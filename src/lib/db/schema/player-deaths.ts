@@ -1,4 +1,11 @@
-import { bigint, integer, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
+import {
+	bigint,
+	integer,
+	jsonb,
+	pgTable,
+	text,
+	uuid,
+} from "drizzle-orm/pg-core";
 import { encounters } from "./encounters";
 
 export const playerDeaths = pgTable("player_deaths", {

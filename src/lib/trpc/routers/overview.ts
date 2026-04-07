@@ -74,9 +74,7 @@ export const overviewRouter = createTRPCRouter({
 			.where(eq(members.coreId, ctx.coreId));
 
 		const rosterNames = new Set(rosterMembers.map((m) => m.name));
-		const rosterClassMap = new Map(
-			rosterMembers.map((m) => [m.name, m.class]),
-		);
+		const rosterClassMap = new Map(rosterMembers.map((m) => [m.name, m.class]));
 
 		// TOP DPS: sum damage / sum duration for kill encounters per player
 		const killEncounters = await db

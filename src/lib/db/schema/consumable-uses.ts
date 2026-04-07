@@ -1,4 +1,11 @@
-import { boolean, integer, pgTable, smallint, text, uuid } from "drizzle-orm/pg-core";
+import {
+	boolean,
+	integer,
+	pgTable,
+	smallint,
+	text,
+	uuid,
+} from "drizzle-orm/pg-core";
 import { encounters } from "./encounters";
 
 export const consumableUses = pgTable("consumable_uses", {

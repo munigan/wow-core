@@ -25,7 +25,10 @@ function getValueColor(pct: number | null, higherIsBetter: boolean): string {
 function MetricChange({
 	pct,
 	colorClass,
-}: { pct: number | null; colorClass: string }) {
+}: {
+	pct: number | null;
+	colorClass: string;
+}) {
 	if (pct === null) return null;
 	const isPositive = pct > 0;
 
@@ -199,7 +202,10 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 							>
 								{formatNumber(raidDps)}
 							</span>
-							<MetricChange pct={dpsPct} colorClass={getValueColor(dpsPct, true)} />
+							<MetricChange
+								pct={dpsPct}
+								colorClass={getValueColor(dpsPct, true)}
+							/>
 						</div>
 						<div className="flex flex-col gap-2 border border-border bg-card p-4">
 							<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
@@ -210,7 +216,10 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 							>
 								{formatDuration(raid.durationMs ?? 0)}
 							</span>
-							<MetricChange pct={durPct} colorClass={getValueColor(durPct, false)} />
+							<MetricChange
+								pct={durPct}
+								colorClass={getValueColor(durPct, false)}
+							/>
 						</div>
 						<div className="flex flex-col gap-2 border border-border bg-card p-4">
 							<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
@@ -221,7 +230,10 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 							>
 								{data.totalConsumables}
 							</span>
-							<MetricChange pct={consPct} colorClass={getValueColor(consPct, true)} />
+							<MetricChange
+								pct={consPct}
+								colorClass={getValueColor(consPct, true)}
+							/>
 						</div>
 						<div className="flex flex-col gap-2 border border-border bg-card p-4">
 							<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
@@ -232,7 +244,10 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 							>
 								{data.totalDeaths}
 							</span>
-							<MetricChange pct={deathPct} colorClass={getValueColor(deathPct, false)} />
+							<MetricChange
+								pct={deathPct}
+								colorClass={getValueColor(deathPct, false)}
+							/>
 						</div>
 					</div>
 				);

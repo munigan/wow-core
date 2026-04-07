@@ -70,9 +70,7 @@ const RadarTooltip = ({ active, payload }: RadarTooltipProps) => {
 	return (
 		<div className="border border-accent bg-sidebar px-3.5 py-2.5">
 			<div className="flex items-center gap-2">
-				{icon && (
-					<Image src={icon} alt={point.class} width={16} height={16} />
-				)}
+				{icon && <Image src={icon} alt={point.class} width={16} height={16} />}
 				<span
 					className="font-body text-xs font-bold uppercase"
 					style={{ color }}
@@ -139,32 +137,26 @@ export const OverviewClassDistribution = () => {
 			<div className="min-h-0 flex-1">
 				<ResponsiveContainer width="100%" height="100%">
 					<RadarChart cx="50%" cy="50%" outerRadius="65%" data={data}>
-					<PolarGrid
-						stroke="var(--color-border)"
-						strokeDasharray="4 4"
-					/>
-					<PolarAngleAxis
-						dataKey="class"
-						tick={CustomTick as never}
-						tickSize={28}
-					/>
-					<Tooltip
-						content={<RadarTooltip />}
-						cursor={false}
-					/>
-					<Radar
-						dataKey="count"
-						fill="var(--color-accent)"
-						fillOpacity={0.15}
-						stroke="var(--color-accent)"
-						strokeWidth={1.5}
-						dot={{
-							r: 3,
-							fill: "var(--color-accent)",
-							strokeWidth: 0,
-						}}
-					/>
-				</RadarChart>
+						<PolarGrid stroke="var(--color-border)" strokeDasharray="4 4" />
+						<PolarAngleAxis
+							dataKey="class"
+							tick={CustomTick as never}
+							tickSize={28}
+						/>
+						<Tooltip content={<RadarTooltip />} cursor={false} />
+						<Radar
+							dataKey="count"
+							fill="var(--color-accent)"
+							fillOpacity={0.15}
+							stroke="var(--color-accent)"
+							strokeWidth={1.5}
+							dot={{
+								r: 3,
+								fill: "var(--color-accent)",
+								strokeWidth: 0,
+							}}
+						/>
+					</RadarChart>
 				</ResponsiveContainer>
 			</div>
 		</div>
