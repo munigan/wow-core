@@ -1,0 +1,18 @@
+{
+	"version": "0.0.1",
+	"configurations": [
+		{
+			"name": "next-dev",
+			"runtimeExecutable": "pnpm",
+			"runtimeArgs": ["dev"],
+			"port": 3000,
+			"autoPort": true
+		},
+		{
+			"name": "drizzle-studio",
+			"runtimeExecutable": "pnpm",
+			"runtimeArgs": ["db:studio"],
+			"port": 4983
+		}
+	]
+}
