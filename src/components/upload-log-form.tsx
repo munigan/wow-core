@@ -149,6 +149,15 @@ type DuplicateInfo = {
 	existingDate?: string;
 };
 
+/** Same calendar day in the browser's local timezone (not "within 24 hours"). */
+function isSameLocalCalendarDay(a: Date, b: Date): boolean {
+	return (
+		a.getFullYear() === b.getFullYear() &&
+		a.getMonth() === b.getMonth() &&
+		a.getDate() === b.getDate()
+	);
+}
+
 function checkLikelyDuplicate(
 	raid: DetectedRaid,
 	coreId: string,
@@ -158,7 +167,6 @@ function checkLikelyDuplicate(
 	if (!raidInstance) return { isDuplicate: false };
 
 	const raidStartDate = new Date(raid.startTime);
-	const oneDayMs = 1000 * 60 * 60 * 24;
 
 	for (const existing of existingRaids) {
 		if (existing.coreId !== coreId) continue;
@@ -167,18 +175,16 @@ function checkLikelyDuplicate(
 		if (!existingName.includes(raidInstance.toLowerCase())) continue;
 
 		const existingDate = new Date(existing.date);
-		const dayDiff =
-			Math.abs(raidStartDate.getTime() - existingDate.getTime()) / oneDayMs;
-		if (dayDiff <= 1) {
-			return {
-				isDuplicate: true,
-				existingName: existing.name,
-				existingDate: existingDate.toLocaleDateString("en-US", {
-					month: "long",
-					day: "numeric",
-				}),
-			};
-		}
+		if (!isSameLocalCalendarDay(raidStartDate, existingDate)) continue;
+
+		return {
+			isDuplicate: true,
+			existingName: existing.name,
+			existingDate: existingDate.toLocaleDateString("en-US", {
+				month: "long",
+				day: "numeric",
+			}),
+		};
 	}
 
 	return { isDuplicate: false };
@@ -237,8 +243,6 @@ export function UploadLogForm({
 		if (!existingRaidsQuery.data) return;
 
 		hasAppliedDefaultsRef.current = true;
-
-		const existingRaids = existingRaidsQuery.data;
 
 		setState((prev) => {
 			if (prev.step !== "choose") return prev;

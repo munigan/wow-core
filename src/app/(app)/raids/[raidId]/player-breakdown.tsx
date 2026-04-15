@@ -37,24 +37,49 @@ function formatDeathTime(secs: number): string {
 }
 
 function PlayerDeathsTooltip({
+	mode,
+	raidId,
 	encounterId,
+	playerGuid,
 	playerName,
 	deathCount,
 }: {
-	encounterId: string;
+	mode: "encounter" | "raid";
+	raidId?: string;
+	encounterId?: string;
+	playerGuid: string;
 	playerName: string;
 	deathCount: number;
 }) {
-	const { data, isLoading } = trpc.raids.getEncounterDeaths.useQuery(
-		{ encounterId },
-		{ enabled: deathCount > 0 },
+	const encounterQuery = trpc.raids.getEncounterDeaths.useQuery(
+		{ encounterId: encounterId ?? "" },
+		{
+			enabled: mode === "encounter" && deathCount > 0 && Boolean(encounterId),
+		},
 	);
+
+	const raidQuery = trpc.raids.getRaidKillPlayerDeaths.useQuery(
+		{ raidId: raidId ?? "", playerGuid },
+		{
+			enabled: mode === "raid" && deathCount > 0 && Boolean(raidId),
+		},
+	);
+
+	const isLoading =
+		mode === "encounter" ? encounterQuery.isLoading : raidQuery.isLoading;
 
 	if (deathCount === 0) {
 		return <span className="text-dimmed">0</span>;
 	}
 
-	const playerDeaths = data?.filter((d) => d.playerName === playerName) ?? [];
+	const encounterDeaths =
+		mode === "encounter"
+			? (encounterQuery.data?.filter((d) => d.playerName === playerName) ?? [])
+			: [];
+	const raidDeaths = mode === "raid" ? (raidQuery.data ?? []) : [];
+
+	const hasDetailData =
+		mode === "encounter" ? encounterQuery.data : raidQuery.data;
 
 	return (
 		<TooltipRoot>
@@ -65,26 +90,50 @@ function PlayerDeathsTooltip({
 			</TooltipTrigger>
 			<TooltipContent side="top">
 				<TooltipLabel>Deaths — {playerName}</TooltipLabel>
-				{isLoading || !data ? (
+				{isLoading || !hasDetailData ? (
 					<span className="font-body text-2xs text-dimmed">Loading...</span>
-				) : (
-					<div className="flex flex-col gap-1.5">
-						{playerDeaths.map((death, i) => (
+				) : mode === "raid" ? (
+					<div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto">
+						{raidDeaths.map((d) => (
 							<div
-								key={`${death.timeIntoEncounter}-${i}`}
+								key={`${d.bossName}-${d.timeIntoEncounter}-${d.killingSpell ?? "x"}`}
 								className="flex flex-col gap-0.5"
 							>
 								<div className="flex items-center justify-between gap-6 font-body text-xs">
-									<span className="text-primary">{death.playerName}</span>
+									<span className="text-secondary">{d.bossName}</span>
 									<span className="text-dimmed">
-										{formatDeathTime(death.timeIntoEncounter)}
+										{formatDeathTime(d.timeIntoEncounter)}
 									</span>
 								</div>
-								{death.killingSpell && (
+								{d.killingSpell && (
 									<span className="font-body text-2xs text-secondary">
-										{death.killingSpell}
-										{death.killedBy && death.killedBy !== "nil"
-											? ` — ${death.killedBy}`
+										{d.killingSpell}
+										{d.killedBy && d.killedBy !== "nil"
+											? ` — ${d.killedBy}`
+											: ""}
+									</span>
+								)}
+							</div>
+						))}
+					</div>
+				) : (
+					<div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto">
+						{encounterDeaths.map((d) => (
+							<div
+								key={`${d.timeIntoEncounter}-${d.killingSpell ?? "x"}`}
+								className="flex flex-col gap-0.5"
+							>
+								<div className="flex items-center justify-between gap-6 font-body text-xs">
+									<span className="text-primary">{playerName}</span>
+									<span className="text-dimmed">
+										{formatDeathTime(d.timeIntoEncounter)}
+									</span>
+								</div>
+								{d.killingSpell && (
+									<span className="font-body text-2xs text-secondary">
+										{d.killingSpell}
+										{d.killedBy && d.killedBy !== "nil"
+											? ` — ${d.killedBy}`
 											: ""}
 									</span>
 								)}
@@ -152,38 +201,30 @@ function formatSpec(
 	return specName.charAt(0).toUpperCase() + specName.slice(1);
 }
 
-function getUptimeAttrs(
-	value: number | null,
-): Record<string, boolean | undefined> {
-	if (value === null) return {};
-	if (value >= 100) return { "data-full": true };
-	if (value >= 80) return { "data-partial": true };
-	return {};
-}
-
-function formatUptime(value: number | null): string {
-	if (value === null) return "—";
-	return `${Math.round(value)}%`;
-}
-
 type EncounterOption = {
 	id: string;
 	bossName: string;
 };
 
+const ALL_ENCOUNTERS_VALUE = "all";
+
 type PlayerBreakdownProps = {
+	raidId: string;
 	encounters: EncounterOption[];
 	formatNumber: (n: number) => string;
 };
 
 export function PlayerBreakdown({
+	raidId,
 	encounters,
 	formatNumber,
 }: PlayerBreakdownProps) {
 	const [selectedEncounterId, setSelectedEncounterId] = useQueryState(
 		"encounter",
-		parseAsString.withDefault(encounters[0]?.id ?? ""),
+		parseAsString.withDefault(ALL_ENCOUNTERS_VALUE),
 	);
+
+	const isAllEncounters = selectedEncounterId === ALL_ENCOUNTERS_VALUE;
 	const [roleFilter, setRoleFilter] = useQueryState(
 		"role",
 		parseAsString.withDefault("all"),
@@ -201,16 +242,32 @@ export function PlayerBreakdown({
 		parseAsStringEnum(["asc", "desc"]).withDefault("desc"),
 	);
 
-	const { data, isLoading } = trpc.raids.getEncounterDetails.useQuery(
+	const encounterDetailsQuery = trpc.raids.getEncounterDetails.useQuery(
 		{ encounterId: selectedEncounterId },
 		{
-			enabled: selectedEncounterId !== "",
+			enabled: !isAllEncounters && selectedEncounterId !== "",
 			placeholderData: keepPreviousData,
 		},
 	);
 
+	const aggregatedQuery =
+		trpc.raids.getRaidKillPlayerBreakdownAggregated.useQuery(
+			{ raidId },
+			{
+				enabled: isAllEncounters,
+				placeholderData: keepPreviousData,
+			},
+		);
+
+	const data = isAllEncounters
+		? aggregatedQuery.data
+		: encounterDetailsQuery.data;
+	const isLoading = isAllEncounters
+		? aggregatedQuery.isLoading
+		: encounterDetailsQuery.isLoading;
+
 	const filteredPlayers = useMemo(() => {
-		if (!data) return [];
+		if (!data?.players) return [];
 		const filtered = data.players.filter((p) => {
 			if (roleFilter !== "all" && getRole(p.spec) !== roleFilter) return false;
 			if (classFilter !== "all" && p.class !== classFilter) return false;
@@ -228,10 +285,6 @@ export function PlayerBreakdown({
 					return dir * (a.damage - b.damage);
 				case "deaths":
 					return dir * (a.deathCount - b.deathCount);
-				case "flask":
-					return dir * ((a.flaskUptime ?? -1) - (b.flaskUptime ?? -1));
-				case "food":
-					return dir * ((a.foodUptime ?? -1) - (b.foodUptime ?? -1));
 				case "pots":
 					return dir * (a.totalPots - b.totalPots);
 				case "engi":
@@ -253,38 +306,61 @@ export function PlayerBreakdown({
 				</div>
 				<div className="border border-border">
 					<Skeleton className="h-10 w-full" />
-					{Array.from({ length: 8 }).map((_, i) => (
-						<Skeleton key={i} className="h-10 w-full border-t border-border" />
+					{(
+						[
+							"pb-sk-1",
+							"pb-sk-2",
+							"pb-sk-3",
+							"pb-sk-4",
+							"pb-sk-5",
+							"pb-sk-6",
+							"pb-sk-7",
+							"pb-sk-8",
+						] as const
+					).map((skId) => (
+						<Skeleton
+							key={skId}
+							className="h-10 w-full border-t border-border"
+						/>
 					))}
 				</div>
 			</div>
 		);
 	}
 
-	if (!data) return null;
+	if (!data?.players) return null;
 
 	const uniqueClasses = [
 		...new Set(data.players.map((p) => p.class).filter(Boolean)),
 	].sort() as string[];
+
+	const encounterSelectItems = [
+		{ value: ALL_ENCOUNTERS_VALUE, label: "ALL" },
+		...encounters.map((enc) => ({ value: enc.id, label: enc.bossName })),
+	];
 
 	return (
 		<div className="flex flex-col gap-3">
 			<span className="font-body text-xs uppercase tracking-wider text-secondary">
 				Per-Player Breakdown
 			</span>
-			<div className="flex items-center gap-2">
+			{isAllEncounters && (
+				<p className="font-body text-2xs text-dimmed">
+					ALL: DPS is averaged per boss; damage, deaths, and pot/engineering
+					counts are summed across kill encounters.
+				</p>
+			)}
+			<div className="flex flex-wrap items-center gap-2">
 				<SelectRoot
 					value={selectedEncounterId}
-					items={encounters.map((enc) => ({
-						value: enc.id,
-						label: enc.bossName,
-					}))}
+					items={encounterSelectItems}
 					onValueChangeAction={(v) =>
-						setSelectedEncounterId(v ?? encounters[0]?.id ?? "")
+						setSelectedEncounterId(v ?? ALL_ENCOUNTERS_VALUE)
 					}
 				>
-					<SelectTrigger placeholder="Select Encounter" size="sm" />
+					<SelectTrigger placeholder="Encounter" size="sm" />
 					<SelectPopup>
+						<SelectItem value={ALL_ENCOUNTERS_VALUE}>ALL</SelectItem>
 						{encounters.map((enc) => (
 							<SelectItem key={enc.id} value={enc.id}>
 								{enc.bossName}
@@ -391,28 +467,6 @@ export function PlayerBreakdown({
 								className="w-24"
 							/>
 							<SortHeader
-								label="Flask"
-								column="flask"
-								currentSort={sortColumn}
-								currentDirection={sortDir}
-								onSortAction={(c, d) => {
-									setSortColumn(c);
-									setSortDir(d);
-								}}
-								className="w-16"
-							/>
-							<SortHeader
-								label="Food"
-								column="food"
-								currentSort={sortColumn}
-								currentDirection={sortDir}
-								onSortAction={(c, d) => {
-									setSortColumn(c);
-									setSortDir(d);
-								}}
-								className="w-16"
-							/>
-							<SortHeader
 								label="Pots"
 								column="pots"
 								currentSort={sortColumn}
@@ -438,7 +492,10 @@ export function PlayerBreakdown({
 					</thead>
 					<tbody className="text-sm">
 						{filteredPlayers.map((player, idx) => (
-							<tr key={player.id} className="border-b border-elevated">
+							<tr
+								key={isAllEncounters ? player.playerGuid : player.id}
+								className="border-b border-elevated"
+							>
 								<td className="py-2.5 pl-4 text-dimmed">{idx + 1}</td>
 								<td className="py-2.5 text-primary">{player.playerName}</td>
 								<td className="py-2.5">
@@ -472,22 +529,15 @@ export function PlayerBreakdown({
 								</td>
 								<td className="py-2.5">
 									<PlayerDeathsTooltip
-										encounterId={selectedEncounterId}
+										mode={isAllEncounters ? "raid" : "encounter"}
+										raidId={raidId}
+										encounterId={
+											isAllEncounters ? undefined : selectedEncounterId
+										}
+										playerGuid={player.playerGuid}
 										playerName={player.playerName}
 										deathCount={player.deathCount}
 									/>
-								</td>
-								<td
-									{...getUptimeAttrs(player.flaskUptime)}
-									className="py-2.5 text-danger data-full:text-accent data-partial:text-warning"
-								>
-									{formatUptime(player.flaskUptime)}
-								</td>
-								<td
-									{...getUptimeAttrs(player.foodUptime)}
-									className="py-2.5 text-danger data-full:text-accent data-partial:text-warning"
-								>
-									{formatUptime(player.foodUptime)}
 								</td>
 								<td
 									data-has-prepot={player.hasPrePot || undefined}
@@ -518,9 +568,9 @@ export function PlayerBreakdown({
 												<TooltipContent side="top">
 													<TooltipLabel>Consumables</TooltipLabel>
 													<div className="flex flex-col gap-1">
-														{potItems.map((item, index) => (
+														{potItems.map((item) => (
 															<div
-																key={index}
+																key={`${item.type}-${item.spellName}`}
 																className="flex items-center justify-between gap-6 font-body text-xs"
 															>
 																<span className="text-accent">
@@ -556,9 +606,9 @@ export function PlayerBreakdown({
 												<TooltipContent side="top">
 													<TooltipLabel>Consumables</TooltipLabel>
 													<div className="flex flex-col gap-1">
-														{engiItems.map((item, index) => (
+														{engiItems.map((item) => (
 															<div
-																key={index}
+																key={`${item.type}-${item.spellName}`}
 																className="flex items-center justify-between gap-6 font-body text-xs"
 															>
 																<span className="text-accent">

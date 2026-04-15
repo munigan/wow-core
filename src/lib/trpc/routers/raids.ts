@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import {
 	and,
+	asc,
 	count,
 	countDistinct,
 	desc,
@@ -13,7 +14,6 @@ import {
 } from "drizzle-orm";
 import { z } from "zod/v4";
 import { db } from "@/lib/db";
-import { buffUptimes } from "@/lib/db/schema/buff-uptimes";
 import { consumableUses } from "@/lib/db/schema/consumable-uses";
 import { encounterPlayers } from "@/lib/db/schema/encounter-players";
 import { encounters } from "@/lib/db/schema/encounters";
@@ -182,6 +182,24 @@ export const raidsRouter = createTRPCRouter({
 				.from(raids)
 				.where(inArray(raids.coreId, input.coreIds))
 				.orderBy(desc(raids.date));
+		}),
+
+	deleteRaid: protectedProcedure
+		.input(z.object({ raidId: z.string() }))
+		.mutation(async ({ ctx, input }) => {
+			const deleted = await db
+				.delete(raids)
+				.where(and(eq(raids.id, input.raidId), eq(raids.coreId, ctx.coreId)))
+				.returning({ id: raids.id });
+
+			if (deleted.length === 0) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Raid not found",
+				});
+			}
+
+			return { id: deleted[0].id };
 		}),
 
 	getById: protectedProcedure
@@ -359,14 +377,6 @@ export const raidsRouter = createTRPCRouter({
 				);
 			}
 
-			// Buff uptimes
-			const uptimes = await db
-				.select()
-				.from(buffUptimes)
-				.where(eq(buffUptimes.encounterId, input.encounterId));
-
-			const uptimeMap = new Map(uptimes.map((u) => [u.playerGuid, u]));
-
 			// Consumable uses
 			const consumables = await db
 				.select()
@@ -405,15 +415,12 @@ export const raidsRouter = createTRPCRouter({
 
 			const playersWithStats = players
 				.map((p) => {
-					const uptime = uptimeMap.get(p.playerGuid);
 					const cons = consumableMap.get(p.playerGuid);
 					return {
 						...p,
 						dps:
 							durationMs > 0 ? Math.round((p.damage / durationMs) * 1000) : 0,
 						deathCount: deathCountByPlayer.get(p.playerGuid) ?? 0,
-						flaskUptime: uptime?.flaskUptimePercent ?? null,
-						foodUptime: uptime?.foodUptimePercent ?? null,
 						totalPots: cons?.totalPots ?? 0,
 						hasPrePot: cons?.hasPrePot ?? false,
 						totalEngi: cons?.totalEngi ?? 0,
@@ -426,6 +433,268 @@ export const raidsRouter = createTRPCRouter({
 				encounter: encounter.encounters,
 				players: playersWithStats,
 			};
+		}),
+
+	getRaidKillPlayerBreakdownAggregated: protectedProcedure
+		.input(z.object({ raidId: z.string() }))
+		.query(async ({ ctx, input }) => {
+			const raidRow = await db
+				.select({ id: raids.id })
+				.from(raids)
+				.where(and(eq(raids.id, input.raidId), eq(raids.coreId, ctx.coreId)))
+				.then((rows) => rows[0]);
+
+			if (!raidRow) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Raid not found",
+				});
+			}
+
+			const killEncounterRows = await db
+				.select()
+				.from(encounters)
+				.where(
+					and(
+						eq(encounters.raidId, input.raidId),
+						eq(encounters.result, "kill"),
+					),
+				)
+				.orderBy(asc(encounters.order));
+
+			if (killEncounterRows.length === 0) {
+				return { players: [] };
+			}
+
+			// One row per boss (latest kill by encounter order), matching raid details UI
+			const killByBoss = new Map<string, (typeof killEncounterRows)[number]>();
+			for (const enc of killEncounterRows) {
+				const prev = killByBoss.get(enc.bossName);
+				if (!prev || enc.order > prev.order) {
+					killByBoss.set(enc.bossName, enc);
+				}
+			}
+			const killEncounters = [...killByBoss.values()].sort(
+				(a, b) => a.order - b.order,
+			);
+
+			const encounterIds = killEncounters.map((e) => e.id);
+
+			const allPlayers = await db
+				.select()
+				.from(encounterPlayers)
+				.where(inArray(encounterPlayers.encounterId, encounterIds));
+
+			const allDeaths = await db
+				.select()
+				.from(playerDeaths)
+				.where(inArray(playerDeaths.encounterId, encounterIds));
+
+			const allConsumables = await db
+				.select()
+				.from(consumableUses)
+				.where(inArray(consumableUses.encounterId, encounterIds));
+
+			type ConsumableAgg = {
+				totalPots: number;
+				hasPrePot: boolean;
+				totalEngi: number;
+				items: { spellName: string; count: number; type: string }[];
+			};
+
+			type Acc = {
+				playerGuid: string;
+				playerName: string;
+				class: string | null;
+				spec: string | null;
+				rowId: string;
+				dpsSum: number;
+				dpsEncCount: number;
+				damage: number;
+				damageTaken: number;
+				deaths: number;
+				totalPots: number;
+				totalEngi: number;
+				hasPrePot: boolean;
+				itemCounts: Map<
+					string,
+					{ spellName: string; count: number; type: string }
+				>;
+			};
+
+			const byGuid = new Map<string, Acc>();
+
+			for (const enc of killEncounters) {
+				const players = allPlayers.filter((p) => p.encounterId === enc.id);
+				const encDeaths = allDeaths.filter((d) => d.encounterId === enc.id);
+				const encConsumables = allConsumables.filter(
+					(c) => c.encounterId === enc.id,
+				);
+
+				const deathCountByPlayer = new Map<string, number>();
+				for (const death of encDeaths) {
+					deathCountByPlayer.set(
+						death.playerGuid,
+						(deathCountByPlayer.get(death.playerGuid) ?? 0) + 1,
+					);
+				}
+
+				const consumableMap = new Map<string, ConsumableAgg>();
+				for (const c of encConsumables) {
+					const existing = consumableMap.get(c.playerGuid) ?? {
+						totalPots: 0,
+						hasPrePot: false,
+						totalEngi: 0,
+						items: [],
+					};
+					if (c.type === "potion" || c.type === "mana_potion") {
+						existing.totalPots += c.count;
+						if (c.prePot) existing.hasPrePot = true;
+					} else if (c.type === "engineering") {
+						existing.totalEngi += c.count;
+					}
+					existing.items.push({
+						spellName: c.spellName,
+						count: c.count,
+						type: c.type,
+					});
+					consumableMap.set(c.playerGuid, existing);
+				}
+
+				const durationMs = enc.durationMs;
+
+				for (const p of players) {
+					const cons = consumableMap.get(p.playerGuid);
+					const dps =
+						durationMs > 0 ? Math.round((p.damage / durationMs) * 1000) : 0;
+					const deathCount = deathCountByPlayer.get(p.playerGuid) ?? 0;
+
+					let acc = byGuid.get(p.playerGuid);
+					if (!acc) {
+						acc = {
+							playerGuid: p.playerGuid,
+							playerName: p.playerName,
+							class: p.class,
+							spec: p.spec,
+							rowId: p.id,
+							dpsSum: 0,
+							dpsEncCount: 0,
+							damage: 0,
+							damageTaken: 0,
+							deaths: 0,
+							totalPots: 0,
+							totalEngi: 0,
+							hasPrePot: false,
+							itemCounts: new Map(),
+						};
+						byGuid.set(p.playerGuid, acc);
+					} else {
+						acc.playerName = p.playerName;
+						acc.class = p.class;
+						acc.spec = p.spec;
+						acc.rowId = p.id;
+					}
+
+					acc.dpsSum += dps;
+					acc.dpsEncCount += 1;
+					acc.damage += p.damage;
+					acc.damageTaken += p.damageTaken;
+					acc.deaths += deathCount;
+					acc.totalPots += cons?.totalPots ?? 0;
+					acc.totalEngi += cons?.totalEngi ?? 0;
+					acc.hasPrePot = acc.hasPrePot || (cons?.hasPrePot ?? false);
+
+					for (const item of cons?.items ?? []) {
+						const key = `${item.type}:${item.spellName}`;
+						const prev = acc.itemCounts.get(key);
+						if (prev) {
+							prev.count += item.count;
+						} else {
+							acc.itemCounts.set(key, { ...item });
+						}
+					}
+				}
+			}
+
+			const playersWithStats = [...byGuid.values()].map((acc) => {
+				const avgDps =
+					acc.dpsEncCount > 0 ? Math.round(acc.dpsSum / acc.dpsEncCount) : 0;
+
+				return {
+					id: acc.rowId,
+					playerGuid: acc.playerGuid,
+					playerName: acc.playerName,
+					class: acc.class,
+					spec: acc.spec,
+					damage: acc.damage,
+					damageTaken: acc.damageTaken,
+					dps: avgDps,
+					deathCount: acc.deaths,
+					totalPots: acc.totalPots,
+					hasPrePot: acc.hasPrePot,
+					totalEngi: acc.totalEngi,
+					consumableItems: [...acc.itemCounts.values()],
+				};
+			});
+
+			playersWithStats.sort((a, b) => b.dps - a.dps);
+
+			return { players: playersWithStats };
+		}),
+
+	getRaidKillPlayerDeaths: protectedProcedure
+		.input(
+			z.object({
+				raidId: z.string(),
+				playerGuid: z.string(),
+			}),
+		)
+		.query(async ({ ctx, input }) => {
+			const raidRow = await db
+				.select({ id: raids.id })
+				.from(raids)
+				.where(and(eq(raids.id, input.raidId), eq(raids.coreId, ctx.coreId)))
+				.then((rows) => rows[0]);
+
+			if (!raidRow) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Raid not found",
+				});
+			}
+
+			const rows = await db
+				.select({
+					bossName: encounters.bossName,
+					playerName: playerDeaths.playerName,
+					timeIntoEncounter: playerDeaths.timeIntoEncounter,
+					killingBlow: playerDeaths.killingBlow,
+				})
+				.from(playerDeaths)
+				.innerJoin(encounters, eq(playerDeaths.encounterId, encounters.id))
+				.where(
+					and(
+						eq(encounters.raidId, input.raidId),
+						eq(encounters.result, "kill"),
+						eq(playerDeaths.playerGuid, input.playerGuid),
+					),
+				)
+				.orderBy(asc(encounters.order), asc(playerDeaths.timeIntoEncounter));
+
+			return rows.map((d) => {
+				const kb = d.killingBlow as {
+					spellName?: string;
+					sourceName?: string;
+					amount?: number;
+				} | null;
+				return {
+					bossName: d.bossName,
+					playerName: d.playerName,
+					timeIntoEncounter: d.timeIntoEncounter,
+					killingSpell: kb?.spellName ?? null,
+					killedBy: kb?.sourceName ?? null,
+				};
+			});
 		}),
 
 	getEncounterDeaths: protectedProcedure

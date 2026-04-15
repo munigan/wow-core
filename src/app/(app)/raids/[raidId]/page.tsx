@@ -15,6 +15,7 @@ export default async function RaidDetailPage({ params }: RaidDetailPageProps) {
 	await connection();
 	const { raidId } = await params;
 	void trpc.raids.getById.prefetch({ raidId });
+	void trpc.raids.getRaidKillPlayerBreakdownAggregated.prefetch({ raidId });
 
 	return (
 		<HydrateClient>

@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import Link from "next/link";
 import {
 	parseAsInteger,
@@ -67,6 +67,7 @@ export function RaidsList() {
 	);
 	const [page, setPage] = useQueryState("page", parseAsInteger.withDefault(1));
 
+	const utils = trpc.useUtils();
 	const { data: instances } = trpc.raids.listInstances.useQuery();
 	const { data, isLoading } = trpc.raids.list.useQuery(
 		{
@@ -77,6 +78,17 @@ export function RaidsList() {
 		},
 		{ placeholderData: keepPreviousData },
 	);
+
+	const deleteRaid = trpc.raids.deleteRaid.useMutation({
+		onSuccess: () => {
+			void utils.raids.list.invalidate();
+			void utils.raids.listInstances.invalidate();
+			void utils.raids.listByCores.invalidate();
+		},
+		onError: (error) => {
+			window.alert(error.message);
+		},
+	});
 
 	const instanceItems = [
 		{ value: "", label: "All Instances" },
@@ -174,8 +186,9 @@ export function RaidsList() {
 								<th className="w-24 py-2.5 text-left font-normal">Duration</th>
 								<th className="w-20 py-2.5 text-left font-normal">Bosses</th>
 								<th className="w-20 py-2.5 text-left font-normal">Players</th>
-								<th className="w-20 py-2.5 pr-4 text-left font-normal">
-									Deaths
+								<th className="w-20 py-2.5 text-left font-normal">Deaths</th>
+								<th className="w-14 py-2.5 pr-4 text-right font-normal">
+									<span className="sr-only">Delete</span>
 								</th>
 							</tr>
 						</thead>
@@ -184,7 +197,7 @@ export function RaidsList() {
 								<Fragment key={dateLabel}>
 									<tr>
 										<td
-											colSpan={6}
+											colSpan={7}
 											className="border-b border-elevated bg-page py-2 pl-4 font-body text-xs uppercase tracking-wider text-secondary"
 										>
 											{dateLabel}
@@ -228,9 +241,32 @@ export function RaidsList() {
 												<td className="py-2.5 text-primary">{r.playerCount}</td>
 												<td
 													data-has-deaths={r.deathCount > 0 || undefined}
-													className="py-2.5 pr-4 text-dimmed data-has-deaths:text-danger"
+													className="py-2.5 text-dimmed data-has-deaths:text-danger"
 												>
 													{r.deathCount}
+												</td>
+												<td className="py-2.5 pr-4 text-right">
+													<button
+														type="button"
+														aria-label={`Delete raid ${r.name as string}`}
+														disabled={
+															deleteRaid.isPending &&
+															deleteRaid.variables?.raidId === r.id
+														}
+														onClick={() => {
+															if (
+																!window.confirm(
+																	"Delete this raid and all related combat data (encounters, deaths, buffs)? This cannot be undone.",
+																)
+															) {
+																return;
+															}
+															deleteRaid.mutate({ raidId: r.id });
+														}}
+														className="inline-flex items-center justify-center rounded border border-border p-1.5 text-dimmed transition-colors hover:border-danger hover:text-danger disabled:opacity-50"
+													>
+														<Trash2 className="size-3.5" />
+													</button>
 												</td>
 											</tr>
 										);

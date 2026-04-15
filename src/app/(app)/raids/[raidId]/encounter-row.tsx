@@ -24,8 +24,12 @@ type EncounterData = {
 type EncounterRowProps = {
 	encounter: EncounterData;
 	killOrder: number;
-	wipeCount: number;
-	wipes: EncounterData[];
+	/** Earlier pulls shown under expand (counted as wipe attempts for the badge) */
+	priorAttemptCount: number;
+	/** When true, the primary row is the raid’s last successful kill for this boss */
+	isPrimarySuccessfulKill: boolean;
+	/** Earlier / other attempts (chronological); always shown as wipe in the UI */
+	nestedAttempts: EncounterData[];
 	formatNumber: (n: number) => string;
 };
 
@@ -71,9 +75,9 @@ function DeathsTooltip({
 					<span className="font-body text-2xs text-dimmed">Loading...</span>
 				) : (
 					<div className="flex flex-col gap-1.5">
-						{data.map((death, i) => (
+						{data.map((death) => (
 							<div
-								key={`${death.playerName}-${death.timeIntoEncounter}-${i}`}
+								key={`${death.playerName}-${death.timeIntoEncounter}-${death.killingSpell ?? "x"}`}
 								className="flex flex-col gap-0.5"
 							>
 								<div className="flex items-center justify-between gap-6 font-body text-xs">
@@ -102,24 +106,25 @@ function DeathsTooltip({
 export function EncounterRow({
 	encounter,
 	killOrder,
-	wipeCount,
-	wipes,
+	priorAttemptCount,
+	isPrimarySuccessfulKill,
+	nestedAttempts,
 	formatNumber,
 }: EncounterRowProps) {
 	const [isExpanded, setIsExpanded] = useState(false);
-	const hasWipes = wipeCount > 0;
+	const hasNested = nestedAttempts.length > 0;
 
 	return (
 		<>
 			<tr
-				data-expandable={hasWipes || undefined}
+				data-expandable={hasNested || undefined}
 				className="border-b border-elevated text-sm data-expandable:cursor-pointer data-expandable:hover:bg-subtle"
-				onClick={hasWipes ? () => setIsExpanded((prev) => !prev) : undefined}
+				onClick={hasNested ? () => setIsExpanded((prev) => !prev) : undefined}
 			>
 				<td className="w-14 py-3 pl-4 text-dimmed">{killOrder}</td>
 				<td className="py-3">
 					<span className="flex items-center gap-2">
-						{hasWipes && (
+						{hasNested && (
 							<span className="text-dimmed">
 								{isExpanded ? (
 									<ChevronDown className="size-3.5" />
@@ -129,9 +134,9 @@ export function EncounterRow({
 							</span>
 						)}
 						<span className="text-primary">{encounter.bossName}</span>
-						{hasWipes && (
+						{priorAttemptCount > 0 && (
 							<span className="text-2xs text-danger">
-								{wipeCount} {wipeCount === 1 ? "wipe" : "wipes"}
+								{priorAttemptCount} {priorAttemptCount === 1 ? "wipe" : "wipes"}
 							</span>
 						)}
 					</span>
@@ -147,28 +152,34 @@ export function EncounterRow({
 					/>
 				</td>
 				<td className="py-3 pr-4">
-					<span className="bg-accent-20 px-2 py-0.5 text-3xs font-semibold uppercase text-accent">
-						Kill
-					</span>
+					{isPrimarySuccessfulKill ? (
+						<span className="bg-accent-20 px-2 py-0.5 text-3xs font-semibold uppercase text-accent">
+							Kill
+						</span>
+					) : (
+						<span className="bg-danger-20 px-2 py-0.5 text-3xs font-semibold uppercase text-danger">
+							Wipe
+						</span>
+					)}
 				</td>
 			</tr>
 
 			{isExpanded &&
-				wipes.map((wipe, idx) => (
+				nestedAttempts.map((attempt, idx) => (
 					<tr
-						key={wipe.id}
+						key={attempt.id}
 						className="border-b border-elevated bg-page text-xs text-secondary shadow-[inset_2px_0_0_0_var(--color-danger-40)]"
 					>
 						<td className="py-2 pl-4" />
 						<td className="py-2 pl-4">Attempt {idx + 1}</td>
-						<td className="py-2">{formatNumber(wipe.raidDps)}</td>
+						<td className="py-2">{formatNumber(attempt.raidDps)}</td>
 						<td className="py-2 text-secondary">
-							{formatEncounterDuration(wipe.durationMs)}
+							{formatEncounterDuration(attempt.durationMs)}
 						</td>
 						<td className="py-2">
 							<DeathsTooltip
-								encounterId={wipe.id}
-								deathCount={wipe.deathCount}
+								encounterId={attempt.id}
+								deathCount={attempt.deathCount}
 							/>
 						</td>
 						<td className="py-2 pr-4">

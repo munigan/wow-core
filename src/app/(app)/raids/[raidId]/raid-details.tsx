@@ -81,25 +81,87 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 		{ enabled: !!data?.raidInstance },
 	);
 
-	const killEncounters = useMemo(() => {
+	type EncounterRow = NonNullable<typeof data>["encounters"][number];
+
+	type BossTableRow = {
+		bossName: string;
+		minOrder: number;
+		primary: EncounterRow;
+		nestedAttempts: EncounterRow[];
+		/** True when at least one pull is logged as kill — primary row is the last kill */
+		isPrimarySuccessfulKill: boolean;
+	};
+
+	const bossRows = useMemo((): BossTableRow[] => {
 		if (!data) return [];
-		const kills = data.encounters.filter((e) => e.result === "kill");
+		const all = data.encounters;
+		const byBoss = new Map<string, EncounterRow[]>();
+		for (const e of all) {
+			const list = byBoss.get(e.bossName) ?? [];
+			list.push(e);
+			byBoss.set(e.bossName, list);
+		}
+
+		const rows: BossTableRow[] = [];
+		for (const list of byBoss.values()) {
+			const sorted = [...list].sort((a, b) => a.order - b.order);
+			const kills = sorted.filter((e) => e.result === "kill");
+			const primary =
+				kills.length > 0
+					? kills.reduce((a, b) => (a.order > b.order ? a : b))
+					: sorted[sorted.length - 1];
+			const nestedAttempts = sorted.filter((e) => e.id !== primary.id);
+			const minOrder = Math.min(...sorted.map((e) => e.order));
+			const hasSuccessfulKill = kills.length > 0;
+			rows.push({
+				bossName: sorted[0].bossName,
+				minOrder,
+				primary,
+				nestedAttempts,
+				isPrimarySuccessfulKill: hasSuccessfulKill,
+			});
+		}
+
 		const dir = encDir === "asc" ? 1 : -1;
-		return [...kills].sort((a, b) => {
+		rows.sort((a, b) => {
+			const pa = a.primary;
+			const pb = b.primary;
 			switch (encSort) {
 				case "encounter":
 					return dir * a.bossName.localeCompare(b.bossName);
 				case "dps":
-					return dir * (a.raidDps - b.raidDps);
+					return dir * (pa.raidDps - pb.raidDps);
 				case "duration":
-					return dir * (a.durationMs - b.durationMs);
+					return dir * (pa.durationMs - pb.durationMs);
 				case "deaths":
-					return dir * (a.deathCount - b.deathCount);
+					return dir * (pa.deathCount - pb.deathCount);
 				default:
-					return dir * (a.order - b.order);
+					return dir * (a.minOrder - b.minOrder);
 			}
 		});
+
+		return rows;
 	}, [data, encSort, encDir]);
+
+	const killEncountersForMetrics = useMemo(() => {
+		if (!data) return [];
+		return bossRows
+			.filter((row) => row.isPrimarySuccessfulKill)
+			.map((row) => row.primary);
+	}, [data, bossRows]);
+
+	const totalKillDamage = killEncountersForMetrics.reduce(
+		(sum, e) => sum + e.totalDamage,
+		0,
+	);
+	const totalKillDurationMs = killEncountersForMetrics.reduce(
+		(sum, e) => sum + e.durationMs,
+		0,
+	);
+	const raidDps =
+		totalKillDurationMs > 0
+			? Math.round((totalKillDamage / totalKillDurationMs) * 1000)
+			: 0;
 
 	if (!data) {
 		return (
@@ -109,8 +171,8 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 					<Skeleton className="h-4 w-96" />
 				</div>
 				<div className="grid grid-cols-4 gap-3">
-					{Array.from({ length: 4 }).map((_, i) => (
-						<Skeleton key={i} className="h-16 w-full" />
+					{(["m1", "m2", "m3", "m4"] as const).map((k) => (
+						<Skeleton key={k} className="h-16 w-full" />
 					))}
 				</div>
 				<div className="flex flex-col gap-3">
@@ -121,40 +183,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 		);
 	}
 
-	const { encounters, ...raid } = data;
-
-	const wipeEncounters = encounters.filter((e) => e.result === "wipe");
-
-	// Group encounters by boss name for wipe count
-	const wipeCountByBoss = new Map<string, number>();
-	for (const enc of wipeEncounters) {
-		wipeCountByBoss.set(
-			enc.bossName,
-			(wipeCountByBoss.get(enc.bossName) ?? 0) + 1,
-		);
-	}
-
-	// Wipe attempts grouped by boss for expandable rows
-	const wipesByBoss = new Map<string, typeof encounters>();
-	for (const enc of wipeEncounters) {
-		const existing = wipesByBoss.get(enc.bossName) ?? [];
-		existing.push(enc);
-		wipesByBoss.set(enc.bossName, existing);
-	}
-
-	// Metrics — use totalDamage from server to avoid rounding errors
-	const totalKillDamage = killEncounters.reduce(
-		(sum, e) => sum + e.totalDamage,
-		0,
-	);
-	const totalKillDurationMs = killEncounters.reduce(
-		(sum, e) => sum + e.durationMs,
-		0,
-	);
-	const raidDps =
-		totalKillDurationMs > 0
-			? Math.round((totalKillDamage / totalKillDurationMs) * 1000)
-			: 0;
+	const { ...raid } = data;
 
 	const showAvg = avgData && avgData.raidCount > 1;
 
@@ -322,13 +351,14 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 							</tr>
 						</thead>
 						<tbody>
-							{killEncounters.map((enc, idx) => (
+							{bossRows.map((row, idx) => (
 								<EncounterRow
-									key={enc.id}
-									encounter={enc}
+									key={row.primary.id}
+									encounter={row.primary}
 									killOrder={idx + 1}
-									wipeCount={wipeCountByBoss.get(enc.bossName) ?? 0}
-									wipes={wipesByBoss.get(enc.bossName) ?? []}
+									priorAttemptCount={row.nestedAttempts.length}
+									isPrimarySuccessfulKill={row.isPrimarySuccessfulKill}
+									nestedAttempts={row.nestedAttempts}
 									formatNumber={formatNumber}
 								/>
 							))}
@@ -338,9 +368,10 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 			</div>
 
 			{/* Per-Player Breakdown */}
-			{killEncounters.length > 0 && (
+			{killEncountersForMetrics.length > 0 && (
 				<PlayerBreakdown
-					encounters={killEncounters.map((e) => ({
+					raidId={raidId}
+					encounters={killEncountersForMetrics.map((e) => ({
 						id: e.id,
 						bossName: e.bossName,
 					}))}

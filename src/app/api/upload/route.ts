@@ -256,10 +256,16 @@ export async function POST(request: Request) {
 		return Response.json({ error: "Invalid file key" }, { status: 403 });
 	}
 
-	// Verify all selected raids target the user's active core
-	const activeCoreId = session.session.activeOrganizationId;
-	const hasInvalidCore = selectedRaids.some((r) => r.coreId !== activeCoreId);
-	if (!activeCoreId || hasInvalidCore) {
+	// Verify each raid targets a core the user belongs to (matches UI core picker /
+	// smart overlap assignment — not necessarily the active org in the session)
+	const organizations = await auth.api.listOrganizations({
+		headers: requestHeaders,
+	});
+	const allowedCoreIds = new Set((organizations ?? []).map((o) => o.id));
+	const hasInvalidCore = selectedRaids.some(
+		(r) => !allowedCoreIds.has(r.coreId),
+	);
+	if (allowedCoreIds.size === 0 || hasInvalidCore) {
 		return Response.json({ error: "Invalid core selection" }, { status: 403 });
 	}
 
