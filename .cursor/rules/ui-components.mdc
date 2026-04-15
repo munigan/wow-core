@@ -1,0 +1,52 @@
+---
+description: Primitives under src/components/ui — Base UI, tailwind-merge/variants, patterns
+globs: src/components/ui/**/*
+alwaysApply: false
+---
+
+# UI components
+
+## Rules
+
+1. **Composition** — compound components (`SelectRoot`, `SelectTrigger`, …); named exports. Simple leaves (Button, Badge, Card) single export is fine
+2. **tailwind-merge** — components without variants (override `className`)
+3. **tailwind-variants** — only when real variants exist; TV merges `className` (no extra `twMerge` usually)
+4. **@base-ui/react** — primitives needing a11y, keyboard, positioning
+5. Extend native element props in TypeScript
+6. **Named exports** — `export const` / `export type`, no default exports
+7. **No arbitrary Tailwind** — tokens in `globals.css` (`@theme`), not `text-[11px]`
+8. **Tailwind syntax** — `data-active:` not `data-[active]:`; `origin-(--var)` not `origin-[var(--var)]`
+9. **Client callbacks** — props ending with `Action` (e.g. `onValueChangeAction`) in `"use client"` files to avoid RSC warnings
+
+## Tooltip
+
+`TooltipTrigger` defaults to `<button>`. Wrapping a `<Button>`, use `render={<span />}` to avoid nested buttons.
+
+`TooltipProvider` default `delay={200}`. Tooltips: `side: "flip"`, `align: "shift"`, `collisionPadding: 8`.
+
+## Component index
+
+| Part       | Pattern   | Styling        |
+| ---------- | --------- | -------------- |
+| alert      | single    | tv             |
+| button     | single    | tv             |
+| badge      | single    | tv             |
+| card       | single    | tw-merge       |
+| input      | single    | tw-merge       |
+| nav-item   | single    | tv             |
+| select     | compound  | base-ui + merge |
+| tabs       | compound  | base-ui + merge |
+| progress-bar | single  | base-ui + merge |
+| tooltip    | compound  | base-ui + merge |
+| popover    | compound  | base-ui + merge |
+| dialog     | compound  | base-ui + merge |
+
+## Popover / Dialog
+
+`PopoverTrigger` / `DialogTrigger`: same `render={<span />}` pattern when wrapping a button.
+
+`PopoverRoot` / `DialogRoot`: `onOpenChangeAction` for controlled mode. Dialog: `border border-accent bg-sidebar`, modal by default.
+
+## Alert
+
+Form usage: first error only — `errors.root?.message ?? field…`. Place `<Alert message={firstError} />` above fields.

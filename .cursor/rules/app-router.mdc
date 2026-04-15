@@ -1,0 +1,38 @@
+---
+description: App Router — RSC pages, route groups, proxy, providers
+globs: src/app/**/*
+alwaysApply: false
+---
+
+# App Router
+
+## Pages are server components
+
+Do not add `"use client"` to `page.tsx` or `layout.tsx`. Keep pages as server components; interactive UI lives in colocated client modules.
+
+```
+app/(auth)/sign-in/
+├── page.tsx           # Server — imports form
+└── sign-in-form.tsx   # "use client"
+```
+
+```tsx
+import { SignInForm } from "./sign-in-form";
+
+export default function SignInPage() {
+  return <SignInForm />;
+}
+```
+
+## Route groups
+
+- `(auth)` — public auth (`/sign-in`, `/sign-up`), centered layout
+- `(app)` — authenticated, session-checked
+
+## Proxy
+
+Next.js 16 uses `src/proxy.ts` (not `middleware.ts`). Default export `async function proxy()`. Matcher excludes `/api`, `/_next`, `/dev`, static assets.
+
+## Providers
+
+`src/app/providers.tsx` is `"use client"` — TanStack Query / tRPC; imported from root `layout.tsx` (server).

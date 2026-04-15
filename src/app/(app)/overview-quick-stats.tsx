@@ -9,7 +9,7 @@ import {
 	Zap,
 } from "lucide-react";
 import Image from "next/image";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import dkIcon from "@/assets/classes/dk.png";
 import druidIcon from "@/assets/classes/druid.png";
 import hunterIcon from "@/assets/classes/hunter.png";
@@ -20,8 +20,27 @@ import rogueIcon from "@/assets/classes/rogue.png";
 import shamanIcon from "@/assets/classes/shaman.png";
 import warlockIcon from "@/assets/classes/warlock.png";
 import warriorIcon from "@/assets/classes/warrior.png";
+import {
+	SelectItem,
+	type SelectOption,
+	SelectPopup,
+	SelectRoot,
+	SelectTrigger,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+	QUICK_STATS_DEFAULT_PHASE,
+	QUICK_STATS_PHASE_OPTIONS,
+	type WotlkPhaseId,
+} from "@/lib/game/wotlk-content-phases";
 import { trpc } from "@/lib/trpc/client";
+
+const PHASE_SELECT_ITEMS: SelectOption[] = QUICK_STATS_PHASE_OPTIONS.map(
+	(o) => ({
+		value: o.id,
+		label: o.label,
+	}),
+);
 
 const CLASS_ICONS: Record<string, typeof dkIcon> = {
 	warrior: warriorIcon,
@@ -119,14 +138,35 @@ const StatRow = ({
 const Divider = () => <div className="h-px w-full bg-border" />;
 
 export const OverviewQuickStats = () => {
-	const { data, isLoading } = trpc.overview.getQuickStats.useQuery();
+	const [phaseOverride, setPhaseOverride] = useState<WotlkPhaseId | undefined>(
+		undefined,
+	);
+
+	const { data, isLoading } = trpc.overview.getQuickStats.useQuery(
+		phaseOverride === undefined ? undefined : { phase: phaseOverride },
+	);
+
+	const phaseValue =
+		phaseOverride ?? data?.appliedPhase ?? QUICK_STATS_DEFAULT_PHASE;
 
 	if (isLoading) {
 		return (
 			<div className="flex flex-col gap-4 border border-border bg-card p-6">
-				<Skeleton className="h-3 w-24" />
-				{Array.from({ length: 6 }).map((_, i) => (
-					<div key={i} className="flex flex-col gap-4">
+				<div className="flex items-center justify-between gap-3">
+					<Skeleton className="h-3 w-24" />
+					<Skeleton className="h-8 w-20" />
+				</div>
+				{(
+					[
+						"qs-sk-0",
+						"qs-sk-1",
+						"qs-sk-2",
+						"qs-sk-3",
+						"qs-sk-4",
+						"qs-sk-5",
+					] as const
+				).map((rowKey, i) => (
+					<div key={rowKey} className="flex flex-col gap-4">
 						{i > 0 && <Divider />}
 						<div className="flex items-center gap-2.5">
 							<Skeleton className="size-3.5" />
@@ -143,9 +183,33 @@ export const OverviewQuickStats = () => {
 
 	return (
 		<div className="flex flex-col gap-4 border border-border bg-card p-6">
-			<span className="font-body text-2xs font-bold uppercase tracking-wider text-secondary">
-				{"// Quick Stats"}
-			</span>
+			<div className="flex items-center justify-between gap-3">
+				<span className="font-body text-2xs font-bold uppercase tracking-wider text-secondary">
+					{"// Quick Stats"}
+				</span>
+				<SelectRoot
+					value={phaseValue}
+					items={PHASE_SELECT_ITEMS}
+					onValueChangeAction={(v) => {
+						if (v === "t8" || v === "t9") {
+							setPhaseOverride(v);
+						}
+					}}
+				>
+					<SelectTrigger placeholder="Phase" size="sm" className="shrink-0" />
+					<SelectPopup>
+						{QUICK_STATS_PHASE_OPTIONS.map((opt) => (
+							<SelectItem
+								key={opt.id}
+								value={opt.id}
+								disabled={!opt.isSelectable}
+							>
+								{opt.label}
+							</SelectItem>
+						))}
+					</SelectPopup>
+				</SelectRoot>
+			</div>
 
 			{data.topDps && (
 				<StatRow

@@ -103,14 +103,21 @@ export type SelectItemProps = {
 	value: string;
 	children: React.ReactNode;
 	className?: string;
+	disabled?: boolean;
 };
 
-export const SelectItem = ({ value, children, className }: SelectItemProps) => {
+export const SelectItem = ({
+	value,
+	children,
+	className,
+	disabled,
+}: SelectItemProps) => {
 	return (
 		<BaseSelect.Item
 			value={value}
+			disabled={disabled}
 			className={twMerge(
-				"grid cursor-default grid-cols-[0.75rem_1fr] items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-secondary outline-none select-none data-highlighted:bg-subtle data-highlighted:text-primary",
+				"grid cursor-default grid-cols-[0.75rem_1fr] items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-secondary outline-none select-none data-disabled:cursor-not-allowed data-disabled:opacity-40 data-highlighted:bg-subtle data-highlighted:text-primary",
 				className,
 			)}
 		>

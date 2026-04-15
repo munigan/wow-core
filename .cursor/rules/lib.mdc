@@ -1,0 +1,58 @@
+---
+description: Database (Drizzle), auth (better-auth), tRPC, upload API — src/lib
+globs: src/lib/**/*
+alwaysApply: false
+---
+
+# Lib
+
+## Database (Drizzle ORM)
+
+- **Driver**: `postgres` (postgres-js, ESM-native — not `pg`)
+- **Casing**: `casing: "snake_case"` in `drizzle.config.ts` and the client — TS camelCase maps to SQL snake_case
+- **Timestamps**: `timestamp({ withTimezone: true })` — helper `timestamptz()` per schema file
+- **Primary keys**: `uuid().primaryKey().defaultRandom()`
+- **Schema files**: one file per table or related group in `src/lib/db/schema/`
+- **Barrel export** (`src/lib/db/schema/index.ts`): export tables **and** a named `schema` object:
+
+```ts
+export const schema = { users, sessions, accounts, verifications };
+```
+
+Use `schema.users` in queries, not bare `users`.
+
+## Auth (better-auth)
+
+- **Server**: `src/lib/auth.ts` — Drizzle adapter `provider: "pg"`, schema mapping (`user: schema.users`, …)
+- **Client**: `src/lib/auth-client.ts` — `createAuthClient()` from `better-auth/react`
+- **API route**: `src/app/api/auth/[...all]/route.ts` — `toNextJsHandler(auth)`
+- **IDs**: `generateId: false` — DB generates UUIDs via `defaultRandom()`
+- **Tables**: plural (`users`, `sessions`, …) with `modelName` on `user` / `session` where needed
+- **Session**: server `auth.api.getSession({ headers: await headers() })` · client `authClient.useSession()`
+
+## tRPC
+
+- **v11** (`@trpc/server`, `@trpc/client`, `@trpc/react-query`)
+- **Init**: `src/lib/trpc/init.ts` — `createTRPCContext`, `createTRPCRouter`, `baseProcedure`, `protectedProcedure`
+- **Context**: `auth` session → `{ session, user, coreId }`. `protectedProcedure` requires all non-null
+- **Server / RSC**: `src/lib/trpc/server.ts` — `trpc`, `HydrateClient` — import `@/lib/trpc/server`
+- **Client**: `src/lib/trpc/client.tsx` — `trpc`, `TRPCProvider`; `splitLink` → non-JSON `httpLink`, else `httpBatchStreamLink`
+- **Query client**: `src/lib/trpc/query-client.ts` — shared `makeQueryClient()`
+- **Routers**: `src/lib/trpc/routers/_app.ts` merges sub-routers (`raids.ts`, `members.ts`, …)
+- **API**: `src/app/api/trpc/[...trpc]/route.ts`
+- **Providers**: `src/app/providers.tsx` includes `TRPCProvider` / `QueryClientProvider`
+
+### New procedure
+
+1. Add or edit `src/lib/trpc/routers/*.ts`
+2. Use `protectedProcedure` when auth is required
+3. Use `ctx.coreId` for active core
+4. Merge into `_app.ts` if new router
+
+## Upload API
+
+- **Route**: `POST /api/upload` — `src/app/api/upload/route.ts` (not tRPC; streaming binary)
+- **Auth**: `auth.api.getSession()`
+- **Parser**: `@munigan/wow-combatlog-parser` — `parseLog(ReadableStream, RaidSelection[])`
+- **Flow**: stream → parse → JSON (DB behavior per current implementation)
+- **Client scan**: `scanLog()` in Web Worker — `src/lib/scan.worker.ts`

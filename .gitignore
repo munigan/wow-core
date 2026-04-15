@@ -38,6 +38,9 @@ docs/plans/
 # combat logs
 example-logs/
 
+# local / generated scratch (e.g. data exports)
+tmp/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

@@ -1,0 +1,47 @@
+---
+description: Domain components (non-ui) — Wowhead, item tooltip, upload flow
+globs: src/components/*.tsx
+alwaysApply: false
+---
+
+# Domain components
+
+App-specific components here; compose `src/components/ui/*`. (Nested folders under `src/components/`: extend the glob in this rule if added.)
+
+## Wowhead (WotLK Classic)
+
+`https://nether.wowhead.com/wotlk/tooltip/item/{itemId}`
+
+```ts
+{
+  name: string;
+  quality: number; // 0–7
+  icon: string;
+  tooltip: string; // HTML, Wowhead classes
+}
+```
+
+Icon: `https://wow.zamimg.com/images/wow/icons/medium/{icon}.jpg`
+
+| Q | Name      | Color     |
+| - | --------- | --------- |
+| 0 | Poor      | `#9d9d9d` |
+| 1 | Common    | `#ffffff` |
+| 2 | Uncommon  | `#1eff00` |
+| 3 | Rare      | `#0070dd` |
+| 4 | Epic      | `#a335ee` |
+| 5 | Legendary | `#ff8000` |
+| 6 | Artifact  | `#e6cc80` |
+| 7 | Heirloom  | `#00ccff` |
+
+## Item tooltip
+
+`item-tooltip.tsx` — TanStack Query key `["wowhead-item", itemId]`, ~30m stale. HTML in `.wh-tooltip` + `dangerouslySetInnerHTML`; styles in `globals.css` (`.q0`–`.q8`, sockets, etc.). Border from `quality`.
+
+## Upload log dialog
+
+`upload-log-dialog.tsx` — trigger in sidebar; `onDoneAction` closes when flow completes. `DialogRoot`, `DialogTrigger`, `DialogContent`, …
+
+## Upload log form
+
+`upload-log-form.tsx` — state machine: `select` | `uploading` | `error` | `done`. XHR to `POST /api/upload`, `Content-Type: application/octet-stream`. Response type includes `raidId`, `raidName`, `raidDate`, `totalMembers`, `newMembers`. Cancel aborts XHR. Not React Hook Form (binary upload).

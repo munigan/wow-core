@@ -1,0 +1,29 @@
+---
+description: Core stack, naming, design system, and forms — wow-core defaults
+alwaysApply: true
+---
+
+# Project rules (wow-core)
+
+## Stack
+
+Next.js 16 (App Router, Turbopack), Tailwind CSS v4, Biome (lint/format), pnpm, TypeScript, better-auth, Drizzle ORM, postgres-js, React Hook Form, Zod v4
+
+## Naming
+
+- **Booleans** — prefix with `is`, `has`, `should`, `can`, `was`, `will` (e.g. `isLoading`, `hasError`)
+- **Named exports only** — `export const` / `export type`, no default exports (exception: Next.js `page`/`layout` which require `export default`)
+- **Conventional commits** — `feat:`, `fix:`, `chore:`, `docs:`, `style:`, `refactor:`
+
+## Design
+
+- **Dark-only** theme: page bg `#0C0C0C`, primary accent `#00FF88`
+- **Fonts**: Space Grotesk (`font-heading`) + JetBrains Mono (`font-body`)
+- **Design source**: Pencil MCP at `/Users/diegofernandes/Documents/wow-raid-tools-2.pen`
+- **No arbitrary Tailwind values** — add tokens in `globals.css` (`@theme`) instead of bracket classes
+
+## Forms
+
+- **React Hook Form + Zod** — Zod schema, inferred TS type, `zodResolver`
+- **Zod v4** — use `z.email()` not `z.string().email()` for top-level validators
+- Server errors: `setError("root", { message })`, shown apart from field errors
