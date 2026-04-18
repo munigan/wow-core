@@ -126,8 +126,18 @@ Audit and update every router that reads `encounterPlayers.damage` for DPS or da
 
 When `damageTotal` is `NULL` for all players in an encounter (legacy data), UI shows an em dash or tooltip: “Total damage not recorded — re-upload the log to compute it.” When some players null (should not occur), treat as data error; implementation may coalesce per row for display only after confirming invariants.
 
+### Multi-encounter rollups (raid-level and filters)
+
+When summing or averaging **across multiple encounters** (e.g. kill-only footer in raid details, raid-wide DPS cards):
+
+- **Useful:** Always sum each encounter’s `usefulDamage` (finite numbers). Same rules as today’s sums over `totalDamage` before this change.
+- **Total:** If **any** encounter in the rollup set has `totalDamage === null` at the encounter level (because that encounter has legacy player rows), the **aggregated** raid-level total damage and any derived **total** DPS for that rollup are **`null`**. Do **not** sum partial totals—partial sums would under-report and mislead. UI may still show useful-only figures and explain why total is unavailable.
+
+Apply the same rule to overview/member aggregates that combine multiple encounters: if the query cannot guarantee all rows have `damage_total`, expose nullable totals at that aggregate level.
+
 ## UI (`wow-core`)
 
+- **Non-tRPC touchpoints:** Prop types and presentational components (`encounter-row.tsx`, `raid-details.tsx`, `player-breakdown.tsx`, shared formatters) must be updated in the **same** change as router outputs so the breaking rename does not stop at the API layer.
 - **Encounter rows / player breakdown:** Display useful and total side by side (or stacked) with clear labels. When useful equals total (unmapped boss or no padding difference), showing both numbers is acceptable for consistency; optional micro-copy if identical is product choice during implementation.
 - **Formatting:** Reuse existing number formatting helpers.
 - **Accessibility:** Ensure both values are labeled (not color-only).
@@ -146,7 +156,7 @@ When `damageTotal` is `NULL` for all players in an encounter (legacy data), UI s
 
 ## Success Criteria
 
-1. New uploads produce non-null `damageTotal` on every `encounter_players` row that has combat stats, with `damageTotal >= damage` for mapped bosses where extra hostile damage exists.
+1. New uploads: for every inserted `encounter_players` row sourced from `combatStats`, **`damage_total` is non-null** and is a `number` consistent with the parser (including **0** for zero-DPS players). `damageTotal >= damage` whenever extra hostile-only damage exists on mapped bosses; equality otherwise.
 2. UI shows useful and total (and derived DPS) on primary encounter views agreed during implementation.
 3. Legacy rows remain interpretable without false totals.
 4. Parser package tests and wow-core build pass.
