@@ -86,16 +86,36 @@ Raid-wide `PlayerInfo.combatStats` aggregates must sum **both** useful and total
 
 ## Upload Path (`wow-core/src/app/api/upload/route.ts`)
 
-When building `encounter_players` rows from `enc.combatStats`, set both `damage` (useful) and `damageTotal` from parser output. If an older parser version omits `damageTotal` (should not happen once shipped), treat omission as a deployment bug—**do not** silently coerce to useful for totals in application code long term; parser must always emit both after release.
+When building `encounter_players` rows from `enc.combatStats`, set both `damage` (useful) and `damageTotal` from parser output.
+
+**Missing `damageTotal` on a player stat object:** If any `PlayerCombatStats` entry lacks `damageTotal` (undefined / wrong type), **fail the upload transaction** and return **400 Bad Request** with a clear body, e.g. parser/client version mismatch. Do not insert partial rows and do not silently set `damageTotal` to useful. This avoids mixed-deploy states writing misleading totals. **Monorepo expectation:** bump `@munigan/wow-combatlog-parser` (or workspace link) in the same release so the field is always present in practice.
 
 ## API and Aggregations (`wow-core` tRPC)
 
-### Naming
+### DTO contract (normative)
 
-Expose **explicit** names in JSON/DTOs to avoid confusion with legacy `totalDamage` (which today means sum of **useful** damage):
+Today `raids.getById` (and related shapes) expose encounter-level **`totalDamage`** and **`raidDps`** computed from `sum(encounterPlayers.damage)` — that value is **useful** damage only, despite the name. This release **removes that ambiguity** in one coordinated change:
 
-- Encounter list/detail: e.g. `usefulDamage` + `totalDamage` at encounter level (sums over players), plus `raidDpsUseful` and `raidDpsTotal` (or equivalent clear names).
-- Per-player encounter rows: `damageUseful` / `damageTotal` or align with DB column names in selects.
+| Surface | Field | Semantics |
+|--------|--------|------------|
+| Encounter row (raid detail list) | `usefulDamage` | `sum(encounter_players.damage)` — same numeric value as legacy `totalDamage`. |
+| Encounter row | `totalDamage` | `sum(encounter_players.damage_total)` when **all** player rows for that encounter have non-null `damage_total`; otherwise **`null`** (legacy encounter). |
+| Encounter row | `raidDpsUseful` | `Math.round((usefulDamage / durationMs) * 1000)` when `durationMs > 0`, else `0`. Same formula as today’s `raidDps`. |
+| Encounter row | `raidDpsTotal` | `Math.round((totalDamage / durationMs) * 1000)` when `durationMs > 0` and `totalDamage !== null`, else **`null`**. |
+| Per-player row (where exposed) | `damage` | Useful (DB `damage`); keep or alias as `damageUseful` only if a single PR prefers explicit naming — **must not** overload “total” on this field. |
+| Per-player row | `damageTotal` | DB `damage_total` (nullable). |
+
+**Breaking API change (encounter object):** The historical tRPC field **`totalDamage`** was the sum of **useful** damage only (misleading name). It is **removed**. Encounter payloads expose:
+- **`usefulDamage`** — same numeric value the old `totalDamage` had (sum of `encounter_players.damage`).
+- **`totalDamage`** — sum of `encounter_players.damage_total`, or **`null`** when any contributing row has null `damage_total` (legacy encounter).
+
+Consumers that read the old `totalDamage` for rankings must switch to **`usefulDamage`**. **`wow-companion`**, scripts, and cached clients must be updated in the same release train (enumerate in the implementation plan).
+
+**Rounding:** Match existing encounter DPS: `Math.round((damageSum / durationMs) * 1000)` — same as current `raidDps` for the useful path.
+
+### Naming notes
+
+Per-player selects may use DB names (`damage`, `damageTotal`) as long as API docs / frontend labels map them to “Useful” and “Total” in the UI.
 
 Audit and update every router that reads `encounterPlayers.damage` for DPS or damage charts: at minimum `raids`, `members`, `overview`, and any encounter-detail or player-breakdown procedures. Decide per surface:
 
