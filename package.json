@@ -11,20 +11,24 @@
 		"db:migrate": "drizzle-kit migrate",
 		"db:push": "drizzle-kit push",
 		"db:studio": "drizzle-kit studio",
-		"db:generate": "drizzle-kit generate"
+		"db:generate": "drizzle-kit generate",
+		"trigger:dev": "trigger dev",
+		"trigger:deploy": "trigger deploy"
 	},
 	"dependencies": {
 		"@aws-sdk/client-s3": "3.1014.0",
 		"@aws-sdk/s3-request-presigner": "3.1014.0",
 		"@base-ui/react": "1.2.0",
 		"@hookform/resolvers": "5.2.2",
-		"@munigan/wow-combatlog-parser": "0.2.2",
+		"@munigan/wow-combatlog-parser": "github:munigan/wow-combatlog-parser#34ed287",
 		"@react-email/components": "1.0.11",
 		"@tanstack/react-query": "5.90.21",
+		"@trigger.dev/sdk": "4.4.4",
 		"@trpc/client": "11.12.0",
 		"@trpc/react-query": "11.12.0",
 		"@trpc/server": "11.12.0",
 		"better-auth": "1.5.5",
+		"cheerio": "1.2.0",
 		"drizzle-orm": "0.45.1",
 		"lucide-react": "0.577.0",
 		"next": "16.1.6",
@@ -42,11 +46,13 @@
 	"devDependencies": {
 		"@biomejs/biome": "2.4.6",
 		"@tailwindcss/postcss": "^4",
+		"@trigger.dev/build": "4.4.4",
 		"@types/node": "^20",
 		"@types/react": "^19",
 		"@types/react-dom": "^19",
 		"drizzle-kit": "0.31.9",
 		"tailwindcss": "^4",
+		"trigger.dev": "4.4.4",
 		"typescript": "^5"
 	}
 }
