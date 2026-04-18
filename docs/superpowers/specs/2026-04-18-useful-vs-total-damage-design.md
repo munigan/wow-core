@@ -66,16 +66,18 @@ Raid-wide `PlayerInfo.combatStats` aggregates must sum **both** useful and total
 
 ### Consumers outside wow-core
 
-- **`wow-companion`:** If it reads `combatStats` for display or IPC, extend types/UI minimally so builds pass (show total only if product needs it; at minimum tolerate new field).
+- `**wow-companion`:** If it reads `combatStats` for display or IPC, extend types/UI minimally so builds pass (show total only if product needs it; at minimum tolerate new field).
 
 ## Database (`wow-core`)
 
 ### `encounter_players`
 
-| Column | Type | Notes |
-|--------|------|-------|
-| `damage` | bigint, not null | **Useful** damage (unchanged meaning). |
+
+| Column        | Type                 | Notes                                                                                                                  |
+| ------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `damage`      | bigint, not null     | **Useful** damage (unchanged meaning).                                                                                 |
 | `damageTotal` | bigint, **nullable** | Total damage. `NULL` for rows created before this feature (no backfill from stored data). New inserts always set both. |
+
 
 **Rationale for nullable:** Pre-migration rows never had total computed; setting `damageTotal = damage` would under-report total on padded fights and mislead users.
 
@@ -94,22 +96,25 @@ When building `encounter_players` rows from `enc.combatStats`, set both `damage`
 
 ### DTO contract (normative)
 
-Today `raids.getById` (and related shapes) expose encounter-level **`totalDamage`** and **`raidDps`** computed from `sum(encounterPlayers.damage)` — that value is **useful** damage only, despite the name. This release **removes that ambiguity** in one coordinated change:
+Today `raids.getById` (and related shapes) expose encounter-level `**totalDamage`** and `**raidDps`** computed from `sum(encounterPlayers.damage)` — that value is **useful** damage only, despite the name. This release **removes that ambiguity** in one coordinated change:
 
-| Surface | Field | Semantics |
-|--------|--------|------------|
-| Encounter row (raid detail list) | `usefulDamage` | `sum(encounter_players.damage)` — same numeric value as legacy `totalDamage`. |
-| Encounter row | `totalDamage` | `sum(encounter_players.damage_total)` when **all** player rows for that encounter have non-null `damage_total`; otherwise **`null`** (legacy encounter). |
-| Encounter row | `raidDpsUseful` | `Math.round((usefulDamage / durationMs) * 1000)` when `durationMs > 0`, else `0`. Same formula as today’s `raidDps`. |
-| Encounter row | `raidDpsTotal` | `Math.round((totalDamage / durationMs) * 1000)` when `durationMs > 0` and `totalDamage !== null`, else **`null`**. |
-| Per-player row (where exposed) | `damage` | Useful (DB `damage`); keep or alias as `damageUseful` only if a single PR prefers explicit naming — **must not** overload “total” on this field. |
-| Per-player row | `damageTotal` | DB `damage_total` (nullable). |
 
-**Breaking API change (encounter object):** The historical tRPC field **`totalDamage`** was the sum of **useful** damage only (misleading name). It is **removed**. Encounter payloads expose:
-- **`usefulDamage`** — same numeric value the old `totalDamage` had (sum of `encounter_players.damage`).
-- **`totalDamage`** — sum of `encounter_players.damage_total`, or **`null`** when any contributing row has null `damage_total` (legacy encounter).
+| Surface                          | Field           | Semantics                                                                                                                                                |
+| -------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Encounter row (raid detail list) | `usefulDamage`  | `sum(encounter_players.damage)` — same numeric value as legacy `totalDamage`.                                                                            |
+| Encounter row                    | `totalDamage`   | `sum(encounter_players.damage_total)` when **all** player rows for that encounter have non-null `damage_total`; otherwise `**null`** (legacy encounter). |
+| Encounter row                    | `raidDpsUseful` | `Math.round((usefulDamage / durationMs) * 1000)` when `durationMs > 0`, else `0`. Same formula as today’s `raidDps`.                                     |
+| Encounter row                    | `raidDpsTotal`  | `Math.round((totalDamage / durationMs) * 1000)` when `durationMs > 0` and `totalDamage !== null`, else `**null`**.                                       |
+| Per-player row (where exposed)   | `damage`        | Useful (DB `damage`); keep or alias as `damageUseful` only if a single PR prefers explicit naming — **must not** overload “total” on this field.         |
+| Per-player row                   | `damageTotal`   | DB `damage_total` (nullable).                                                                                                                            |
 
-Consumers that read the old `totalDamage` for rankings must switch to **`usefulDamage`**. **`wow-companion`**, scripts, and cached clients must be updated in the same release train (enumerate in the implementation plan).
+
+**Breaking API change (encounter object):** The historical tRPC field `**totalDamage`** was the sum of **useful** damage only (misleading name). It is **removed**. Encounter payloads expose:
+
+- `**usefulDamage`** — same numeric value the old `totalDamage` had (sum of `encounter_players.damage`).
+- `**totalDamage`** — sum of `encounter_players.damage_total`, or `**null**` when any contributing row has null `damage_total` (legacy encounter).
+
+Consumers that read the old `totalDamage` for rankings must switch to `**usefulDamage**`. `**wow-companion**`, scripts, and cached clients must be updated in the same release train (enumerate in the implementation plan).
 
 **Rounding:** Match existing encounter DPS: `Math.round((damageSum / durationMs) * 1000)` — same as current `raidDps` for the useful path.
 
@@ -131,7 +136,7 @@ When `damageTotal` is `NULL` for all players in an encounter (legacy data), UI s
 When summing or averaging **across multiple encounters** (e.g. kill-only footer in raid details, raid-wide DPS cards):
 
 - **Useful:** Always sum each encounter’s `usefulDamage` (finite numbers). Same rules as today’s sums over `totalDamage` before this change.
-- **Total:** If **any** encounter in the rollup set has `totalDamage === null` at the encounter level (because that encounter has legacy player rows), the **aggregated** raid-level total damage and any derived **total** DPS for that rollup are **`null`**. Do **not** sum partial totals—partial sums would under-report and mislead. UI may still show useful-only figures and explain why total is unavailable.
+- **Total:** If **any** encounter in the rollup set has `totalDamage === null` at the encounter level (because that encounter has legacy player rows), the **aggregated** raid-level total damage and any derived **total** DPS for that rollup are `**null`**. Do **not** sum partial totals—partial sums would under-report and mislead. UI may still show useful-only figures and explain why total is unavailable.
 
 Apply the same rule to overview/member aggregates that combine multiple encounters: if the query cannot guarantee all rows have `damage_total`, expose nullable totals at that aggregate level.
 
@@ -144,11 +149,13 @@ Apply the same rule to overview/member aggregates that combine multiple encounte
 
 ## Testing Checklist
 
-| Layer | Tests |
-|-------|--------|
-| Parser | Unit tests for dual accumulation; integration parse on a fixture with excluded adds if available. |
+
+| Layer    | Tests                                                                                                         |
+| -------- | ------------------------------------------------------------------------------------------------------------- |
+| Parser   | Unit tests for dual accumulation; integration parse on a fixture with excluded adds if available.             |
 | wow-core | Migration applies; upload inserts both columns; tRPC returns expected sums for a synthetic or dev DB fixture. |
-| UI | Manual or component test: legacy encounter shows missing total state; new upload shows both. |
+| UI       | Manual or component test: legacy encounter shows missing total state; new upload shows both.                  |
+
 
 ## Maintenance
 
@@ -156,7 +163,7 @@ Apply the same rule to overview/member aggregates that combine multiple encounte
 
 ## Success Criteria
 
-1. New uploads: for every inserted `encounter_players` row sourced from `combatStats`, **`damage_total` is non-null** and is a `number` consistent with the parser (including **0** for zero-DPS players). `damageTotal >= damage` whenever extra hostile-only damage exists on mapped bosses; equality otherwise.
+1. New uploads: for every inserted `encounter_players` row sourced from `combatStats`, `**damage_total` is non-null** and is a `number` consistent with the parser (including **0** for zero-DPS players). `damageTotal >= damage` whenever extra hostile-only damage exists on mapped bosses; equality otherwise.
 2. UI shows useful and total (and derived DPS) on primary encounter views agreed during implementation.
 3. Legacy rows remain interpretable without false totals.
 4. Parser package tests and wow-core build pass.

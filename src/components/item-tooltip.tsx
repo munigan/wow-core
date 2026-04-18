@@ -6,6 +6,7 @@ import {
 	TooltipRoot,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { fetchWotlkItemTooltip } from "@/lib/game/wotlk-item-tooltip";
 
 const QUALITY_COLORS: Record<number, string> = {
 	0: "#9d9d9d",
@@ -17,23 +18,6 @@ const QUALITY_COLORS: Record<number, string> = {
 	6: "#e6cc80",
 	7: "#00ccff",
 };
-
-type WowheadTooltipData = {
-	name: string;
-	quality: number;
-	icon: string;
-	tooltip: string;
-};
-
-async function fetchWowheadTooltip(
-	itemId: number,
-): Promise<WowheadTooltipData> {
-	const res = await fetch(
-		`https://nether.wowhead.com/wotlk/tooltip/item/${itemId}`,
-	);
-	if (!res.ok) throw new Error(`Wowhead API error: ${res.status}`);
-	return res.json();
-}
 
 export type ItemTooltipProps = {
 	itemId: number;
@@ -48,7 +32,7 @@ export const ItemTooltip = ({
 }: ItemTooltipProps) => {
 	const { data } = useQuery({
 		queryKey: ["wowhead-item", itemId],
-		queryFn: () => fetchWowheadTooltip(itemId),
+		queryFn: () => fetchWotlkItemTooltip(itemId),
 		staleTime: 30 * 60 * 1000,
 	});
 

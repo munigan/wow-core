@@ -17,6 +17,7 @@ import { HeatmapGrid } from "@/components/ui/heatmap-grid";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipLabel } from "@/components/ui/tooltip";
 import { trpc } from "@/lib/trpc/client";
+import { MemberGearOverview } from "./member-gear-overview";
 
 const CLASS_ICONS: Record<string, typeof dkIcon> = {
 	warrior: warriorIcon,
@@ -118,8 +119,8 @@ export function MemberDetails({ memberId }: MemberDetailsProps) {
 				</div>
 				{/* Stat cards skeleton */}
 				<div className="grid grid-cols-4 gap-3">
-					{Array.from({ length: 4 }).map((_, i) => (
-						<Skeleton key={i} className="h-16 w-full" />
+					{(["s0", "s1", "s2", "s3"] as const).map((id) => (
+						<Skeleton key={id} className="h-16 w-full" />
 					))}
 				</div>
 				{/* Chart skeleton */}
@@ -247,10 +248,12 @@ export function MemberDetails({ memberId }: MemberDetailsProps) {
 				</div>
 			</div>
 
+			<MemberGearOverview memberId={memberId} />
+
 			{/* DPS Trend Chart */}
 			<div className="flex flex-col gap-3">
 				<span className="font-body text-xs uppercase tracking-wider text-secondary">
-					// DPS Trend — Last 8 Weeks
+					{"// DPS Trend — Last 8 Weeks"}
 				</span>
 				{chartData.length > 0 ? (
 					<div className="border border-border bg-card p-4">
@@ -289,7 +292,7 @@ export function MemberDetails({ memberId }: MemberDetailsProps) {
 			{/* Consumable Compliance Heatmap */}
 			<div className="flex flex-col gap-3">
 				<span className="font-body text-xs uppercase tracking-wider text-secondary">
-					// Consumable Compliance
+					{"// Consumable Compliance"}
 				</span>
 				{heatmapRows.length > 0 ? (
 					<HeatmapGrid
@@ -348,9 +351,9 @@ export function MemberDetails({ memberId }: MemberDetailsProps) {
 													{boss}
 												</span>
 												{items.length > 0 ? (
-													items.map((item, i) => (
+													items.map((item) => (
 														<div
-															key={i}
+															key={`${item.spellName}-${item.isPrePot ? "pp" : "x"}-${item.count}`}
 															className="flex items-center justify-between gap-6 font-body text-xs"
 														>
 															<span className="text-accent">

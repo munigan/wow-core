@@ -54,6 +54,12 @@ yarn-error.log*
 # vercel
 .vercel
 
+# cursor (local MCP / IDE)
+.cursor/
+
+# trigger.dev
+.trigger/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
