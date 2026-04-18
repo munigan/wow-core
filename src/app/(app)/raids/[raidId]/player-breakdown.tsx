@@ -521,11 +521,16 @@ export function PlayerBreakdown({
 										</span>
 									</span>
 								</td>
-								<td className="py-2.5 font-semibold text-primary">
-									<div className="flex flex-col gap-0.5">
-										<span title="Useful DPS">{formatNumber(player.dps)}</span>
+								<td className="py-2.5">
+									<div className="flex items-baseline gap-1.5 font-semibold">
 										<span
-											className="text-2xs font-normal text-secondary"
+											className="text-primary tabular-nums"
+											title="Useful DPS"
+										>
+											{formatNumber(player.dps)}
+										</span>
+										<span
+											className="text-2xs font-normal tabular-nums text-dimmed"
 											title="Total DPS"
 										>
 											{player.dpsTotal != null
@@ -535,11 +540,14 @@ export function PlayerBreakdown({
 									</div>
 								</td>
 								<td className="py-2.5 text-secondary">
-									<div className="flex flex-col gap-0.5">
-										<span title="Useful damage">
+									<div className="flex items-baseline gap-1.5">
+										<span className="tabular-nums" title="Useful damage">
 											{formatNumber(player.damage)}
 										</span>
-										<span className="text-2xs text-dimmed" title="Total damage">
+										<span
+											className="text-2xs tabular-nums text-dimmed"
+											title="Total damage"
+										>
 											{player.damageTotal != null
 												? formatNumber(player.damageTotal)
 												: "—"}

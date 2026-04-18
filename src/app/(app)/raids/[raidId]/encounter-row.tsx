@@ -144,12 +144,12 @@ export function EncounterRow({
 					</span>
 				</td>
 				<td className="py-3">
-					<div className="flex flex-col gap-0.5">
-						<span className="text-primary" title="Useful DPS">
+					<div className="flex items-baseline gap-1.5">
+						<span className="text-primary tabular-nums" title="Useful DPS">
 							{formatNumber(encounter.raidDpsUseful)}
 						</span>
 						<span
-							className="text-2xs text-secondary"
+							className="text-2xs tabular-nums text-dimmed"
 							title="Total DPS (all hostile targets)"
 						>
 							{encounter.raidDpsTotal !== null
@@ -189,11 +189,11 @@ export function EncounterRow({
 						<td className="py-2 pl-4" />
 						<td className="py-2 pl-4">Attempt {idx + 1}</td>
 						<td className="py-2">
-							<div className="flex flex-col gap-0.5">
-								<span className="text-primary">
+							<div className="flex items-baseline gap-1.5">
+								<span className="text-primary tabular-nums">
 									{formatNumber(attempt.raidDpsUseful)}
 								</span>
-								<span className="text-2xs text-secondary">
+								<span className="text-2xs tabular-nums text-dimmed">
 									{attempt.raidDpsTotal !== null
 										? formatNumber(attempt.raidDpsTotal)
 										: "—"}
