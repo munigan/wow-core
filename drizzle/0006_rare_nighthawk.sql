@@ -1,0 +1,1 @@
+ALTER TABLE "encounter_players" ADD COLUMN "damage_total" bigint;

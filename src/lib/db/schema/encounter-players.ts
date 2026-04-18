@@ -11,5 +11,7 @@ export const encounterPlayers = pgTable("encounter_players", {
 	class: text(),
 	spec: text(),
 	damage: bigint({ mode: "number" }).notNull(),
+	/** All hostile NPC damage (nullable for rows uploaded before this column existed). */
+	damageTotal: bigint({ mode: "number" }),
 	damageTaken: bigint({ mode: "number" }).notNull(),
 });

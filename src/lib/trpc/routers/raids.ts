@@ -9,6 +9,7 @@ import {
 	gte,
 	inArray,
 	isNotNull,
+	isNull,
 	sql,
 	sum,
 } from "drizzle-orm";
@@ -234,11 +235,16 @@ export const raidsRouter = createTRPCRouter({
 				};
 			}
 
-			// Aggregate damage and deaths per encounter in two queries
+			// Aggregate useful + total damage per encounter (total is null if any row lacks damage_total)
 			const damageByEncounter = await db
 				.select({
 					encounterId: encounterPlayers.encounterId,
-					totalDamage: sum(encounterPlayers.damage),
+					usefulDamage: sum(encounterPlayers.damage),
+					totalSum: sum(encounterPlayers.damageTotal),
+					nullTotalCount:
+						sql<number>`coalesce(sum(case when ${encounterPlayers.damageTotal} is null then 1 else 0 end), 0)::int`.mapWith(
+							Number,
+						),
 				})
 				.from(encounterPlayers)
 				.where(
@@ -264,10 +270,13 @@ export const raidsRouter = createTRPCRouter({
 				.groupBy(playerDeaths.encounterId);
 
 			const damageMap = new Map(
-				damageByEncounter.map((d) => [
-					d.encounterId,
-					Number(d.totalDamage ?? 0),
-				]),
+				damageByEncounter.map((d) => {
+					const usefulDamage = Number(d.usefulDamage ?? 0);
+					const nullTotalCount = d.nullTotalCount ?? 0;
+					const totalDamage =
+						nullTotalCount > 0 ? null : Number(d.totalSum ?? 0);
+					return [d.encounterId, { usefulDamage, totalDamage }] as const;
+				}),
 			);
 			const deathMap = new Map(
 				deathsByEncounter.map((d) => [d.encounterId, d.deathCount]),
@@ -287,16 +296,27 @@ export const raidsRouter = createTRPCRouter({
 				);
 
 			const encountersWithStats = encounterRows.map((enc) => {
-				const totalDamage = damageMap.get(enc.id) ?? 0;
-				const raidDps =
+				const sums = damageMap.get(enc.id) ?? {
+					usefulDamage: 0,
+					totalDamage: 0,
+				};
+				const usefulDamage = sums.usefulDamage;
+				const totalDamage = sums.totalDamage;
+				const raidDpsUseful =
 					enc.durationMs > 0
-						? Math.round((totalDamage / enc.durationMs) * 1000)
+						? Math.round((usefulDamage / enc.durationMs) * 1000)
 						: 0;
+				const raidDpsTotal =
+					enc.durationMs > 0 && totalDamage !== null
+						? Math.round((totalDamage / enc.durationMs) * 1000)
+						: null;
 
 				return {
 					...enc,
+					usefulDamage,
 					totalDamage,
-					raidDps,
+					raidDpsUseful,
+					raidDpsTotal,
 					deathCount: deathMap.get(enc.id) ?? 0,
 				};
 			});
@@ -416,10 +436,17 @@ export const raidsRouter = createTRPCRouter({
 			const playersWithStats = players
 				.map((p) => {
 					const cons = consumableMap.get(p.playerGuid);
+					const dpsUseful =
+						durationMs > 0 ? Math.round((p.damage / durationMs) * 1000) : 0;
+					const damageTotal = p.damageTotal;
+					const dpsTotal =
+						durationMs > 0 && damageTotal !== null
+							? Math.round((damageTotal / durationMs) * 1000)
+							: null;
 					return {
 						...p,
-						dps:
-							durationMs > 0 ? Math.round((p.damage / durationMs) * 1000) : 0,
+						dps: dpsUseful,
+						dpsTotal,
 						deathCount: deathCountByPlayer.get(p.playerGuid) ?? 0,
 						totalPots: cons?.totalPots ?? 0,
 						hasPrePot: cons?.hasPrePot ?? false,
@@ -480,6 +507,22 @@ export const raidsRouter = createTRPCRouter({
 
 			const encounterIds = killEncounters.map((e) => e.id);
 
+			const legacyEncounterRows = await db
+				.selectDistinct({ encounterId: encounterPlayers.encounterId })
+				.from(encounterPlayers)
+				.where(
+					and(
+						inArray(encounterPlayers.encounterId, encounterIds),
+						isNull(encounterPlayers.damageTotal),
+					),
+				);
+			const legacyEncounterIds = new Set(
+				legacyEncounterRows.map((r) => r.encounterId),
+			);
+			const raidKillHasLegacyTotal = killEncounters.some((e) =>
+				legacyEncounterIds.has(e.id),
+			);
+
 			const allPlayers = await db
 				.select()
 				.from(encounterPlayers)
@@ -509,8 +552,10 @@ export const raidsRouter = createTRPCRouter({
 				spec: string | null;
 				rowId: string;
 				dpsSum: number;
+				dpsSumTotal: number;
 				dpsEncCount: number;
 				damage: number;
+				damageTotalSum: number;
 				damageTaken: number;
 				deaths: number;
 				totalPots: number;
@@ -567,6 +612,10 @@ export const raidsRouter = createTRPCRouter({
 					const cons = consumableMap.get(p.playerGuid);
 					const dps =
 						durationMs > 0 ? Math.round((p.damage / durationMs) * 1000) : 0;
+					const dpsTotalEnc =
+						durationMs > 0 && p.damageTotal !== null
+							? Math.round((p.damageTotal / durationMs) * 1000)
+							: 0;
 					const deathCount = deathCountByPlayer.get(p.playerGuid) ?? 0;
 
 					let acc = byGuid.get(p.playerGuid);
@@ -578,8 +627,10 @@ export const raidsRouter = createTRPCRouter({
 							spec: p.spec,
 							rowId: p.id,
 							dpsSum: 0,
+							dpsSumTotal: 0,
 							dpsEncCount: 0,
 							damage: 0,
+							damageTotalSum: 0,
 							damageTaken: 0,
 							deaths: 0,
 							totalPots: 0,
@@ -596,8 +647,10 @@ export const raidsRouter = createTRPCRouter({
 					}
 
 					acc.dpsSum += dps;
+					acc.dpsSumTotal += dpsTotalEnc;
 					acc.dpsEncCount += 1;
 					acc.damage += p.damage;
+					acc.damageTotalSum += p.damageTotal ?? 0;
 					acc.damageTaken += p.damageTaken;
 					acc.deaths += deathCount;
 					acc.totalPots += cons?.totalPots ?? 0;
@@ -619,6 +672,10 @@ export const raidsRouter = createTRPCRouter({
 			const playersWithStats = [...byGuid.values()].map((acc) => {
 				const avgDps =
 					acc.dpsEncCount > 0 ? Math.round(acc.dpsSum / acc.dpsEncCount) : 0;
+				const avgDpsTotal =
+					!raidKillHasLegacyTotal && acc.dpsEncCount > 0
+						? Math.round(acc.dpsSumTotal / acc.dpsEncCount)
+						: null;
 
 				return {
 					id: acc.rowId,
@@ -627,8 +684,10 @@ export const raidsRouter = createTRPCRouter({
 					class: acc.class,
 					spec: acc.spec,
 					damage: acc.damage,
+					damageTotal: raidKillHasLegacyTotal ? null : acc.damageTotalSum,
 					damageTaken: acc.damageTaken,
 					dps: avgDps,
+					dpsTotal: avgDpsTotal,
 					deathCount: acc.deaths,
 					totalPots: acc.totalPots,
 					hasPrePot: acc.hasPrePot,
@@ -763,6 +822,7 @@ export const raidsRouter = createTRPCRouter({
 			if (raidCount === 0) {
 				return {
 					avgDps: 0,
+					avgDpsTotal: null,
 					avgDurationMs: 0,
 					avgDeaths: 0,
 					avgConsumables: 0,
@@ -787,22 +847,47 @@ export const raidsRouter = createTRPCRouter({
 			const allEncounterIds = allEncounters.map((e) => e.id);
 			const killEncounterIds = killEncounters.map((e) => e.id);
 
-			// Avg DPS: total kill damage / total kill duration across all raids
+			// Avg DPS (useful): total kill useful damage / total kill duration across all raids
 			let avgDps = 0;
+			let avgDpsTotal: number | null = null;
 			if (killEncounterIds.length > 0) {
+				const legacyProbeRows = await db
+					.select({ id: encounterPlayers.id })
+					.from(encounterPlayers)
+					.where(
+						and(
+							inArray(encounterPlayers.encounterId, killEncounterIds),
+							isNull(encounterPlayers.damageTotal),
+						),
+					)
+					.limit(1);
+				const killTotalsHaveLegacy = legacyProbeRows.length > 0;
+
 				const [damageResult] = await db
 					.select({ totalDamage: sum(encounterPlayers.damage) })
 					.from(encounterPlayers)
 					.where(inArray(encounterPlayers.encounterId, killEncounterIds));
-				const totalDamage = Number(damageResult?.totalDamage ?? 0);
+				const totalUsefulDamage = Number(damageResult?.totalDamage ?? 0);
 				const totalDurationMs = killEncounters.reduce(
 					(s, e) => s + e.durationMs,
 					0,
 				);
 				avgDps =
 					totalDurationMs > 0
-						? Math.round((totalDamage / totalDurationMs) * 1000)
+						? Math.round((totalUsefulDamage / totalDurationMs) * 1000)
 						: 0;
+
+				if (!killTotalsHaveLegacy) {
+					const [totalDmgRow] = await db
+						.select({ s: sum(encounterPlayers.damageTotal) })
+						.from(encounterPlayers)
+						.where(inArray(encounterPlayers.encounterId, killEncounterIds));
+					const totalAllDamage = Number(totalDmgRow?.s ?? 0);
+					avgDpsTotal =
+						totalDurationMs > 0
+							? Math.round((totalAllDamage / totalDurationMs) * 1000)
+							: 0;
+				}
 			}
 
 			// Avg Duration
@@ -832,6 +917,13 @@ export const raidsRouter = createTRPCRouter({
 				avgConsumables = Math.round((consumableResult?.total ?? 0) / raidCount);
 			}
 
-			return { avgDps, avgDurationMs, avgDeaths, avgConsumables, raidCount };
+			return {
+				avgDps,
+				avgDpsTotal,
+				avgDurationMs,
+				avgDeaths,
+				avgConsumables,
+				raidCount,
+			};
 		}),
 });

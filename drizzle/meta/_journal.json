@@ -29,6 +29,27 @@
 			"when": 1773713580687,
 			"tag": "0003_common_silk_fever",
 			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1776276294628,
+			"tag": "0004_salty_ultimates",
+			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "7",
+			"when": 1776277045797,
+			"tag": "0005_fine_proteus",
+			"breakpoints": true
+		},
+		{
+			"idx": 6,
+			"version": "7",
+			"when": 1776520796544,
+			"tag": "0006_rare_nighthawk",
+			"breakpoints": true
 		}
 	]
 }

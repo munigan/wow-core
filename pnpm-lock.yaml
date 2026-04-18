@@ -21,8 +21,8 @@ importers:
         specifier: 5.2.2
         version: 5.2.2(react-hook-form@7.71.2(react@19.2.3))
       '@munigan/wow-combatlog-parser':
-        specifier: github:munigan/wow-combatlog-parser#34ed287
-        version: https://codeload.github.com/munigan/wow-combatlog-parser/tar.gz/34ed287a78bd989069bcd49f1bc6234943d25396
+        specifier: file:../wow-combatlog-parser
+        version: file:../wow-combatlog-parser
       '@react-email/components':
         specifier: 1.0.11
         version: 1.0.11(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -1205,9 +1205,8 @@ packages:
   '@mongodb-js/saslprep@1.4.6':
     resolution: {integrity: sha512-y+x3H1xBZd38n10NZF/rEBlvDOOMQ6LKUTHqr8R9VkJ+mmQOYtJFxIlkkK8fZrtOiL6VixbOBWMbZGBdal3Z1g==}
 
-  '@munigan/wow-combatlog-parser@https://codeload.github.com/munigan/wow-combatlog-parser/tar.gz/34ed287a78bd989069bcd49f1bc6234943d25396':
-    resolution: {tarball: https://codeload.github.com/munigan/wow-combatlog-parser/tar.gz/34ed287a78bd989069bcd49f1bc6234943d25396}
-    version: 0.2.3
+  '@munigan/wow-combatlog-parser@file:../wow-combatlog-parser':
+    resolution: {directory: ../wow-combatlog-parser, type: directory}
 
   '@next/env@16.1.6':
     resolution: {integrity: sha512-N1ySLuZjnAtN3kFnwhAwPvZah8RJxKasD7x1f8shFqhncnWZn4JMfg37diLNuoHsLAlrDfM3g4mawVdtAG8XLQ==}
@@ -5065,7 +5064,7 @@ snapshots:
     dependencies:
       sparse-bitfield: 3.0.3
 
-  '@munigan/wow-combatlog-parser@https://codeload.github.com/munigan/wow-combatlog-parser/tar.gz/34ed287a78bd989069bcd49f1bc6234943d25396': {}
+  '@munigan/wow-combatlog-parser@file:../wow-combatlog-parser': {}
 
   '@next/env@16.1.6': {}
 

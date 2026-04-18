@@ -16,8 +16,10 @@ type EncounterData = {
 	durationMs: number;
 	result: string;
 	difficulty: string | null;
-	totalDamage: number;
-	raidDps: number;
+	usefulDamage: number;
+	totalDamage: number | null;
+	raidDpsUseful: number;
+	raidDpsTotal: number | null;
 	deathCount: number;
 };
 
@@ -141,7 +143,21 @@ export function EncounterRow({
 						)}
 					</span>
 				</td>
-				<td className="py-3 text-primary">{formatNumber(encounter.raidDps)}</td>
+				<td className="py-3">
+					<div className="flex flex-col gap-0.5">
+						<span className="text-primary" title="Useful DPS">
+							{formatNumber(encounter.raidDpsUseful)}
+						</span>
+						<span
+							className="text-2xs text-secondary"
+							title="Total DPS (all hostile targets)"
+						>
+							{encounter.raidDpsTotal !== null
+								? formatNumber(encounter.raidDpsTotal)
+								: "—"}
+						</span>
+					</div>
+				</td>
 				<td className="py-3 text-secondary">
 					{formatEncounterDuration(encounter.durationMs)}
 				</td>
@@ -172,7 +188,18 @@ export function EncounterRow({
 					>
 						<td className="py-2 pl-4" />
 						<td className="py-2 pl-4">Attempt {idx + 1}</td>
-						<td className="py-2">{formatNumber(attempt.raidDps)}</td>
+						<td className="py-2">
+							<div className="flex flex-col gap-0.5">
+								<span className="text-primary">
+									{formatNumber(attempt.raidDpsUseful)}
+								</span>
+								<span className="text-2xs text-secondary">
+									{attempt.raidDpsTotal !== null
+										? formatNumber(attempt.raidDpsTotal)
+										: "—"}
+								</span>
+							</div>
+						</td>
 						<td className="py-2 text-secondary">
 							{formatEncounterDuration(attempt.durationMs)}
 						</td>

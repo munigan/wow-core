@@ -48,6 +48,13 @@ type SelectedRaidPayload = z.infer<
 	typeof uploadBodySchema
 >["selectedRaids"][number];
 
+class UploadParserVersionError extends Error {
+	constructor() {
+		super("COMBAT_STATS_MISSING_DAMAGE_TOTAL");
+		this.name = "UploadParserVersionError";
+	}
+}
+
 async function saveRaidToDb(
 	tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
 	parsedRaid: ParsedRaid,
@@ -137,6 +144,14 @@ async function saveRaidToDb(
 
 		// encounter_players from combatStats
 		if (enc.combatStats) {
+			for (const stats of Object.values(enc.combatStats)) {
+				if (
+					typeof stats.damageTotal !== "number" ||
+					Number.isNaN(stats.damageTotal)
+				) {
+					throw new UploadParserVersionError();
+				}
+			}
 			const playerRows = Object.entries(enc.combatStats).map(
 				([guid, stats]) => {
 					const player = playerMap.get(guid);
@@ -147,6 +162,7 @@ async function saveRaidToDb(
 						class: player?.class ?? null,
 						spec: player?.spec ?? null,
 						damage: stats.damage,
+						damageTotal: stats.damageTotal,
 						damageTaken: stats.damageTaken,
 					};
 				},
@@ -306,6 +322,15 @@ export async function POST(request: Request) {
 
 		return Response.json(results);
 	} catch (error) {
+		if (error instanceof UploadParserVersionError) {
+			return Response.json(
+				{
+					error:
+						"Combat stats are missing damageTotal; update the parser and retry.",
+				},
+				{ status: 400 },
+			);
+		}
 		if (error instanceof FileTooLargeError) {
 			return Response.json({ error: "File too large" }, { status: 413 });
 		}

@@ -130,7 +130,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 				case "encounter":
 					return dir * a.bossName.localeCompare(b.bossName);
 				case "dps":
-					return dir * (pa.raidDps - pb.raidDps);
+					return dir * (pa.raidDpsUseful - pb.raidDpsUseful);
 				case "duration":
 					return dir * (pa.durationMs - pb.durationMs);
 				case "deaths":
@@ -150,18 +150,33 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 			.map((row) => row.primary);
 	}, [data, bossRows]);
 
-	const totalKillDamage = killEncountersForMetrics.reduce(
-		(sum, e) => sum + e.totalDamage,
-		0,
-	);
 	const totalKillDurationMs = killEncountersForMetrics.reduce(
 		(sum, e) => sum + e.durationMs,
 		0,
 	);
+	const raidKillHasNullTotal = killEncountersForMetrics.some(
+		(e) => e.totalDamage === null,
+	);
+	const totalKillUsefulDamage = killEncountersForMetrics.reduce(
+		(sum, e) => sum + e.usefulDamage,
+		0,
+	);
+	const totalKillTotalDamage = raidKillHasNullTotal
+		? null
+		: killEncountersForMetrics.reduce(
+				(sum, e) => sum + (e.totalDamage ?? 0),
+				0,
+			);
 	const raidDps =
 		totalKillDurationMs > 0
-			? Math.round((totalKillDamage / totalKillDurationMs) * 1000)
+			? Math.round((totalKillUsefulDamage / totalKillDurationMs) * 1000)
 			: 0;
+	const raidDpsTotal =
+		!raidKillHasNullTotal &&
+		totalKillDurationMs > 0 &&
+		totalKillTotalDamage !== null
+			? Math.round((totalKillTotalDamage / totalKillDurationMs) * 1000)
+			: null;
 
 	if (!data) {
 		return (
@@ -224,12 +239,23 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 					<div className="grid grid-cols-4 gap-3">
 						<div className="flex flex-col gap-2 border border-border bg-card p-4">
 							<span className="font-body text-2xs uppercase tracking-wider text-dimmed">
-								Raid DPS
+								Raid DPS (useful / total)
 							</span>
 							<span
 								className={`font-heading text-3xl font-bold ${getValueColor(dpsPct, true)}`}
 							>
 								{formatNumber(raidDps)}
+								{raidDpsTotal !== null ? (
+									<span className="text-secondary">
+										{" "}
+										/ {formatNumber(raidDpsTotal)}
+									</span>
+								) : (
+									<span className="font-body text-lg font-normal text-dimmed">
+										{" "}
+										/ —
+									</span>
+								)}
 							</span>
 							<MetricChange
 								pct={dpsPct}
@@ -313,7 +339,7 @@ export function RaidDetails({ raidId }: RaidDetailsProps) {
 									}}
 								/>
 								<SortHeader
-									label="DPS"
+									label="DPS (use / total)"
 									column="dps"
 									currentSort={encSort}
 									currentDirection={encDir}
