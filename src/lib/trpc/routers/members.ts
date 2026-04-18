@@ -1,4 +1,3 @@
-import { runs, tasks } from "@trigger.dev/sdk";
 import { TRPCError } from "@trpc/server";
 import {
 	and,
@@ -14,19 +13,14 @@ import {
 } from "drizzle-orm";
 import { z } from "zod/v4";
 import { db } from "@/lib/db";
-import { armoryFetchRuns } from "@/lib/db/schema/armory-fetch-runs";
 import { buffUptimes } from "@/lib/db/schema/buff-uptimes";
 import { consumableUses } from "@/lib/db/schema/consumable-uses";
 import { encounterPlayers } from "@/lib/db/schema/encounter-players";
 import { encounters } from "@/lib/db/schema/encounters";
-import { memberArmoryMeta } from "@/lib/db/schema/member-armory-meta";
-import { memberGearSlots } from "@/lib/db/schema/member-gear-slots";
 import { members } from "@/lib/db/schema/members";
 import { playerDeaths } from "@/lib/db/schema/player-deaths";
 import { raids } from "@/lib/db/schema/raids";
 import { createTRPCRouter, protectedProcedure } from "@/lib/trpc/init";
-import type { fetchMemberArmoryGear } from "@/trigger/fetch-member-armory-gear";
-
 export const membersRouter = createTRPCRouter({
 	list: protectedProcedure.query(async ({ ctx }) => {
 		return db
@@ -549,167 +543,5 @@ export const membersRouter = createTRPCRouter({
 				dpsTrend,
 				heatmapData,
 			};
-		}),
-
-	getArmoryGear: protectedProcedure
-		.input(z.object({ memberId: z.string() }))
-		.query(async ({ ctx, input }) => {
-			const member = await db
-				.select({ id: members.id })
-				.from(members)
-				.where(
-					and(eq(members.id, input.memberId), eq(members.coreId, ctx.coreId)),
-				)
-				.then((rows) => rows[0]);
-
-			if (!member) {
-				throw new TRPCError({ code: "NOT_FOUND", message: "Member not found" });
-			}
-
-			const gearRows = await db
-				.select()
-				.from(memberGearSlots)
-				.where(eq(memberGearSlots.memberId, input.memberId))
-				.orderBy(asc(memberGearSlots.sortOrder));
-
-			const [meta] = await db
-				.select()
-				.from(memberArmoryMeta)
-				.where(eq(memberArmoryMeta.memberId, input.memberId))
-				.limit(1);
-
-			if (gearRows.length > 0) {
-				return {
-					phase: "ready" as const,
-					gear: gearRows,
-					runId: null as string | null,
-					fetchError: null as string | null,
-				};
-			}
-
-			if (meta?.fetchError) {
-				return {
-					phase: "error" as const,
-					gear: [] as typeof gearRows,
-					runId: null as string | null,
-					fetchError: meta.fetchError,
-				};
-			}
-
-			const [pending] = await db
-				.select()
-				.from(armoryFetchRuns)
-				.where(eq(armoryFetchRuns.memberId, input.memberId))
-				.limit(1);
-
-			if (pending) {
-				return {
-					phase: "syncing" as const,
-					gear: [] as typeof gearRows,
-					runId: pending.runId,
-					fetchError: null as string | null,
-				};
-			}
-
-			return {
-				phase: "pending_first_sync" as const,
-				gear: [] as typeof gearRows,
-				runId: null as string | null,
-				fetchError: null as string | null,
-			};
-		}),
-
-	getArmoryRefreshStatus: protectedProcedure
-		.input(z.object({ runId: z.string() }))
-		.query(async ({ ctx, input }) => {
-			const row = await db
-				.select()
-				.from(armoryFetchRuns)
-				.where(
-					and(
-						eq(armoryFetchRuns.runId, input.runId),
-						eq(armoryFetchRuns.coreId, ctx.coreId),
-					),
-				)
-				.limit(1)
-				.then((r) => r[0]);
-
-			if (!row) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "Run not found",
-				});
-			}
-
-			const run = await runs.retrieve(input.runId);
-			const terminal = new Set([
-				"COMPLETED",
-				"FAILED",
-				"CANCELED",
-				"CRASHED",
-				"SYSTEM_FAILURE",
-				"EXPIRED",
-				"TIMED_OUT",
-			]);
-
-			if (terminal.has(run.status)) {
-				await db
-					.delete(armoryFetchRuns)
-					.where(eq(armoryFetchRuns.runId, input.runId));
-			}
-
-			return {
-				status: run.status,
-				errorMessage: run.error?.message ?? null,
-			};
-		}),
-
-	enqueueMemberArmoryRefresh: protectedProcedure
-		.input(z.object({ memberId: z.string() }))
-		.mutation(async ({ ctx, input }) => {
-			const member = await db
-				.select({ id: members.id })
-				.from(members)
-				.where(
-					and(eq(members.id, input.memberId), eq(members.coreId, ctx.coreId)),
-				)
-				.then((rows) => rows[0]);
-
-			if (!member) {
-				throw new TRPCError({ code: "NOT_FOUND", message: "Member not found" });
-			}
-
-			await db
-				.insert(memberArmoryMeta)
-				.values({
-					memberId: input.memberId,
-					fetchError: null,
-				})
-				.onConflictDoUpdate({
-					target: memberArmoryMeta.memberId,
-					set: { fetchError: null },
-				});
-
-			const handle = await tasks.trigger<typeof fetchMemberArmoryGear>(
-				"fetch-member-armory-gear",
-				{ memberId: input.memberId },
-			);
-
-			await db
-				.insert(armoryFetchRuns)
-				.values({
-					runId: handle.id,
-					memberId: input.memberId,
-					coreId: ctx.coreId,
-				})
-				.onConflictDoUpdate({
-					target: armoryFetchRuns.memberId,
-					set: {
-						runId: handle.id,
-						coreId: ctx.coreId,
-					},
-				});
-
-			return { runId: handle.id };
 		}),
 });

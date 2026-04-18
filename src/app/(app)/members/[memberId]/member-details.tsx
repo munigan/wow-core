@@ -17,7 +17,6 @@ import { HeatmapGrid } from "@/components/ui/heatmap-grid";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipLabel } from "@/components/ui/tooltip";
 import { trpc } from "@/lib/trpc/client";
-import { MemberGearOverview } from "./member-gear-overview";
 
 const CLASS_ICONS: Record<string, typeof dkIcon> = {
 	warrior: warriorIcon,
@@ -247,8 +246,6 @@ export function MemberDetails({ memberId }: MemberDetailsProps) {
 					</span>
 				</div>
 			</div>
-
-			<MemberGearOverview memberId={memberId} />
 
 			{/* DPS Trend Chart */}
 			<div className="flex flex-col gap-3">

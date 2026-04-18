@@ -5,8 +5,8 @@ import { members } from "./members";
 const timestamptz = () => timestamp({ withTimezone: true });
 
 /**
- * Tracks Trigger.dev run ids for armory fetches so `getArmoryRefreshStatus` can
- * validate `runId` against the active core (prevents cross-tenant probing).
+ * Tracks Trigger.dev run ids for in-flight `fetch-member-armory-gear` jobs
+ * (one row per member; reconciled when the task finishes).
  */
 export const armoryFetchRuns = pgTable(
 	"armory_fetch_runs",

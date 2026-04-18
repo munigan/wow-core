@@ -6,7 +6,7 @@ export type WotlkItemTooltipData = {
 };
 
 /**
- * WotLK item tooltip JSON from Wowhead (same source as `item-tooltip.tsx`).
+ * WotLK item tooltip JSON from Wowhead (WotLK tooltip API).
  */
 export async function fetchWotlkItemTooltip(
 	itemId: number,
