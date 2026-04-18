@@ -478,33 +478,22 @@ export const raidsRouter = createTRPCRouter({
 				});
 			}
 
-			const killEncounterRows = await db
+			// Include every encounter in the raid — kills AND wipes, every attempt.
+			// The "ALL" view aggregates all attempts so raid-wide counts (pots, engi,
+			// deaths, damage) reflect everything that happened across the night, not
+			// only the final kill attempt per boss. Specific-encounter view (separate
+			// procedure) still drills into a single encounter.
+			const allEncounterRows = await db
 				.select()
 				.from(encounters)
-				.where(
-					and(
-						eq(encounters.raidId, input.raidId),
-						eq(encounters.result, "kill"),
-					),
-				)
+				.where(eq(encounters.raidId, input.raidId))
 				.orderBy(asc(encounters.order));
 
-			if (killEncounterRows.length === 0) {
+			if (allEncounterRows.length === 0) {
 				return { players: [] };
 			}
 
-			// One row per boss (latest kill by encounter order), matching raid details UI
-			const killByBoss = new Map<string, (typeof killEncounterRows)[number]>();
-			for (const enc of killEncounterRows) {
-				const prev = killByBoss.get(enc.bossName);
-				if (!prev || enc.order > prev.order) {
-					killByBoss.set(enc.bossName, enc);
-				}
-			}
-			const killEncounters = [...killByBoss.values()].sort(
-				(a, b) => a.order - b.order,
-			);
-
+			const killEncounters = allEncounterRows;
 			const encounterIds = killEncounters.map((e) => e.id);
 
 			const legacyEncounterRows = await db
@@ -528,15 +517,29 @@ export const raidsRouter = createTRPCRouter({
 				.from(encounterPlayers)
 				.where(inArray(encounterPlayers.encounterId, encounterIds));
 
-			const allDeaths = await db
-				.select()
-				.from(playerDeaths)
-				.where(inArray(playerDeaths.encounterId, encounterIds));
+			// Deaths and consumables span every encounter of the raid (kills, wipes, all
+			// attempts) — not just the latest kill per boss. A mana potion used during an
+			// Assembly of Iron sub-kill or a Mimiron wipe is still a potion the player
+			// used in this raid, and the ALL view should reflect that.
+			const raidEncounterRows = await db
+				.select({ id: encounters.id })
+				.from(encounters)
+				.where(eq(encounters.raidId, input.raidId));
+			const raidEncounterIds = raidEncounterRows.map((e) => e.id);
 
-			const allConsumables = await db
-				.select()
-				.from(consumableUses)
-				.where(inArray(consumableUses.encounterId, encounterIds));
+			const allDeaths = raidEncounterIds.length > 0
+				? await db
+						.select()
+						.from(playerDeaths)
+						.where(inArray(playerDeaths.encounterId, raidEncounterIds))
+				: [];
+
+			const allConsumables = raidEncounterIds.length > 0
+				? await db
+						.select()
+						.from(consumableUses)
+						.where(inArray(consumableUses.encounterId, raidEncounterIds))
+				: [];
 
 			type ConsumableAgg = {
 				totalPots: number;
